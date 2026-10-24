@@ -1,5 +1,5 @@
 {
-  "version": "1.49.0",
+  "version": "1.49.1",
   "updated": "2026-10-24",
   "sections": [
     {
@@ -29,16 +29,16 @@
         ],
         "rows": [
           [
+            "1.49.1",
+            "125",
+            "6.142",
+            "Aktueller Stand; öffentliche README auf den tatsächlichen Funktionsumfang abgestimmt"
+          ],
+          [
             "1.49.0",
             "125",
             "6.142",
             "Aktueller Stand; portable lokale Geräte-, Standort- und Deployment-Konfiguration"
-          ],
-          [
-            "1.48.1",
-            "124",
-            "6.049",
-            "Unmittelbar vorheriger Stand"
           ]
         ]
       }
@@ -485,6 +485,13 @@
   ],
   "releases": [
     {
+      "version": "1.49.1",
+      "date": "2026-10-24",
+      "changes": [
+        "Veraltete README-Einleitung von Version 1.9.0 auf den aktuellen Funktionsstand mit Shelly-, Marstek-, SolarEdge-, Tibber-, Prognose-, Wetter- und Lüfteranbindung gebracht."
+      ]
+    },
+    {
       "version": "1.49.0",
       "date": "2026-10-24",
       "changes": [
@@ -492,7 +499,7 @@
         "Beispielkonfigurationen und gemeinsame Prüfung durch deploy-common.sh für alle Mac-Update-Skripte ergänzt.",
         "Persönliche Mac-Pfade, feste Heimnetzadressen und den persönlichen launchd-Namen aus versionierten Dateien entfernt.",
         "Systemmonitor-Link aus dem aktuellen Dashboard-Host abgeleitet und automatische Veröffentlichungskontrolle ergänzt.",
-        "Den bisherigen zweiten Wetterstandort vollständig durch Sevilla ersetzt; neue Messreihe, Sonnenzeiten, Anzeige, Dokumentation und Tests verwenden die Stadtkoordinaten 37.38620512 / -5.99251368.,",
+        "Den bisherigen zweiten Wetterstandort vollständig durch Sevilla ersetzt; neue Messreihe, Sonnenzeiten, Anzeige, Dokumentation und Tests verwenden die Stadtkoordinaten 37.38620512 / -5.99251368.",
         "Name, Koordinaten und PV-Parameter des primären Standorts in die ignorierte lokale forecast.toml verschoben; der veröffentlichte Stand enthält nur eine neutrale Beispielkonfiguration."
       ]
     },
