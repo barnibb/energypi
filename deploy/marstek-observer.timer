@@ -1,0 +1,10 @@
+[Unit]
+Description=EnergyPi cost observation every 15 minutes
+
+[Timer]
+OnCalendar=*-*-* *:00,15,30,45:10
+Persistent=true
+Unit=marstek-observer.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,4 @@
+# Elfin EW11A: TCP Server, UART Modbus, 115200 8N1 Half Duplex.
+host = "ELFIN_IP"
+port = 502
+unit = 1

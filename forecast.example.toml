@@ -1,0 +1,8 @@
+# Neutrales Beispiel. Vor dem Betrieb nach forecast.toml kopieren und anpassen.
+name = "Anlagenstandort"
+latitude = 0.0
+longitude = 0.0
+kwp = 1.0
+tilt = 30
+# Kompassrichtung: 180° = Süden. Wird für Forecast.Solar in 0° umgerechnet.
+azimuth = 180

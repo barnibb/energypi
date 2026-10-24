@@ -1,0 +1,1305 @@
+{
+  "version": "1.49.0",
+  "updated": "2026-10-24",
+  "sections": [
+    {
+      "title": "Zweck und Aufbau",
+      "paragraphs": [
+        "EnergyPi - Monitor erfasst den Netzfluss des Shelly Pro 3EM und zeigt Messreihen, SolarEdge-Istwerte, PV-Prognosen und Tibber-Preise im Browser. Der Raspberry Pi übernimmt den Dauerbetrieb; die Entwicklung erfolgt lokal auf dem Mac.",
+        "collector.py erfasst Messwerte unabhängig vom Webserver. webapp.py liefert die Flask-Weboberfläche und lokale JSON-Endpunkte. Die Browserdarstellung liegt unter templates/ und static/. systemd startet Collector und Webserver automatisch.",
+        "Das dunkle Kartenlayout ist die Hauptansicht unter /. Das vorherige helle Dashboard bleibt vorläufig unter /design_alt als Rückfallmöglichkeit erreichbar; /design-preview zeigt ebenfalls das neue Dashboard.",
+        "Die drei Shelly-Phasenwerte sind über einen Link in der Kachel „Aktuelle Netzleistung“ als Popup erreichbar. Dadurch entfallen die dauerhaft sichtbaren Phasenkacheln, ohne Messwerte oder Aktualisierung zu ändern.",
+        "Version 1.49.0 trennt veröffentlichbaren Quellcode von lokalen Geräte- und Deployment-Werten. config.toml, marstek.toml, deploy-local.env, secrets.toml und Laufzeitdaten bleiben auf dem jeweiligen Rechner; versionierte Beispieldateien erklären die Einrichtung."
+      ]
+    },
+    {
+      "title": "Projektstruktur: Dateien und Ordner",
+      "paragraphs": [
+        "Die folgende Übersicht zeigt die wichtigsten Dateien. Auf dem Mac wird entwickelt; auf dem Pi laufen die Dienste. data/ und secrets.toml sind Laufzeitdaten bzw. vertrauliche Konfiguration und werden nicht durch normale Code-Updates ersetzt.",
+        "Mac: /PFAD/ZU/marstek-control · Pi: /home/pi/marstek-control. Die Python-Umgebung .venv wird für jeden Rechner separat eingerichtet.",
+        "Gezählt werden physische Zeilen aller produktiven Python-, JavaScript-, HTML-, CSS- und Shell-Dateien einschließlich Installations- und Update-Skripten; ohne Tests, Dokumentation, TOML-Konfiguration, Laufzeitdaten, Sicherungen und virtuelle Umgebung."
+      ],
+      "code": "marstek-control/\n├── webapp.py                 Webserver und lokale API\n├── collector.py              Shelly-Erfassung alle 5 Sekunden\n├── marstek.py                Akku-Erfassung und Steuerungsablauf\n├── marstek_diagnose.py       Schreibfreier Registervergleich\n├── marstek_control.py        Entladebegrenzung beim Autoladen\n├── morning.py                Zeit-, Prognose- und Nachtreserve-Regel\n├── marstek_actions.py        Manuell angeforderter Eigenverbrauch\n├── marstek_display.py        Betriebsart und Entscheidungsprotokoll\n├── charging.py, controller.py  Autolade-Erkennung\n├── optimizer.py              Kostenplan: ausschließlich Beobachtung\n├── grid_charging.py          Manuelle Netzladung über Zeitplan 6\n├── planning_defaults.py      Vorgaben für das Kostenmodell\n├── solaredge.py, energy.py    PV-Leistung und Tagesertrag\n├── forecast.py, tibber.py     PV-Prognose und Strompreise\n├── weather.py                Außentemperatur als Wettermodellwert\n├── sun_times.py              Lokale Sonnenzeiten für Anlagenstandort\n├── fan.py, fan_worker.py      Badlüfter und Abschaltfrist\n├── database.py               SQLite-Zugriff und Shelly-Messungen\n├── balance.py                Netzenergie aus Leistungswerten\n├── battery_history.py        Akku-Verlauf und Lade-/Entladeenergie\n├── flow_summary.py           Energiequellen und Energieziele\n├── finance_summary.py        Tageskosten und Wert der Eigenversorgung\n├── finance_history.py        Wochenverlauf des effektiven Strompreises\n├── preferences.py            Einstellungswerte und Validierung\n├── settings.py               TOML-Konfiguration laden\n├── system_status.py          Zustand aus gespeicherten Daten\n├── maintenance.py            Archivierung und Pi-Sicherungen\n├── backup_status.py          Rückmeldung der Mac-Sicherung\n├── config.toml               Shelly, Datenbank, alter Testmonitor\n├── marstek.toml              Elfin-Adresse, Port und Geräteadresse\n├── forecast.example.toml     Neutrale Vorlage für Standort und PV-Anlage\n├── secrets.toml              Zugangsdaten: privat, nicht verteilen\n├── project_info.json         Dokumentation und Versionsverlauf\n├── templates/                HTML-Seiten\n├── static/                   JavaScript, Diagramme und Gestaltung\n├── data/                     Laufzeitdaten auf dem Pi\n│   ├── measurements.db       Gemeinsame SQLite-Datenbank\n│   └── backups/              Pi-Datenbanksicherungen\n├── deploy/                   systemd-Dienste, Timer und Installer\n├── tests/                    Tests mit temporären Daten und Geräten\n├── update-*.sh               Gezielte Übertragung vom Mac zum Pi\n├── .venv/                    Lokale Python-Umgebung je Rechner\n└── *.md                      Betrieb, Parameter und technische Details\n",
+      "table": {
+        "headers": [
+          "Version",
+          "Produktive Dateien",
+          "Codezeilen",
+          "Hinweis"
+        ],
+        "rows": [
+          [
+            "1.49.0",
+            "125",
+            "6.142",
+            "Aktueller Stand; portable lokale Geräte-, Standort- und Deployment-Konfiguration"
+          ],
+          [
+            "1.48.1",
+            "124",
+            "6.049",
+            "Unmittelbar vorheriger Stand"
+          ]
+        ]
+      }
+    },
+    {
+      "title": "Datenwege: vom Gerät bis zum Dashboard",
+      "paragraphs": [
+        "SQLite ist die gemeinsame Ablage. Hintergrunddienste sammeln und verarbeiten Daten unabhängig vom geöffneten Browser. Dashboard-Abfragen lesen gespeicherte Daten.",
+        "Das Kostenmodell bleibt ein Beobachtungsmodell. Eine davon getrennte, ausdrücklich bestätigte Netzladung wird über grid_charging.py im exklusiven Marstek-Worker ausgeführt. Autolade-Begrenzung und Eigenverbrauchsauftrag bleiben getrennte Steuerpfade."
+      ],
+      "code": "Shelly → collector.py → SQLite\n                         └→ charging.py → Autolade-Zustand\n\nMarstek ↔ Elfin ↔ marstek.py ↔ SQLite\n                    ├→ marstek_control.py: Entladegrenze\n                    └→ marstek_actions.py: Eigenverbrauch auf Klick\n\nSolarEdge / Forecast.Solar / Tibber / Open-Meteo\n          → jeweiliger Sammler → SQLite\n\nSQLite → optimizer.py → gespeicherter Beobachtungsplan\n         (kein Pfad zum Akku; keine Gerätebefehle)\n\nSQLite → webapp.py → Browser / Dashboard\nBrowser → lokale POST-Anfrage → gespeicherter Auftrag / Einstellungen\n          → zuständiger Hintergrunddienst → Gerät\n\nBrowser → NDR-Livestream / Windy direkt\nPi-Datenbank → geprüfte Sicherung → Mac\n"
+    },
+    {
+      "title": "Modulzuständigkeiten",
+      "paragraphs": [
+        "Die Dateien liegen überwiegend direkt im Projektordner; diese Tabelle gruppiert sie nach Aufgabe."
+      ],
+      "table": {
+        "headers": [
+          "Bereich",
+          "Dateien",
+          "Aufgabe"
+        ],
+        "rows": [
+          [
+            "Darstellung",
+            "webapp.py, templates/, static/",
+            "Zeigt gespeicherte Daten; Gerätesteuerung läuft nicht im Browser."
+          ],
+          [
+            "Messung und Erkennung",
+            "collector.py, charging.py, controller.py",
+            "Erfasst Netzleistung und erkennt vermutetes Autoladen."
+          ],
+          [
+            "Akku und Steuerung",
+            "marstek.py, marstek_control.py, marstek_actions.py",
+            "Ein exklusiver Worker liest den Akku und bearbeitet erlaubte Schreibaufträge."
+          ],
+          [
+            "Berechnungen",
+            "balance.py, battery_history.py, flow_summary.py",
+            "Integriert Leistung zu kWh und berechnet Energieanteile."
+          ],
+          [
+            "Kosten-Beobachtung",
+            "optimizer.py, planning_defaults.py",
+            "Erstellt Viertelstundenpläne aus SQLite; kein Gerätezugriff."
+          ],
+          [
+            "Cloud-Daten",
+            "solaredge.py, energy.py, forecast.py, tibber.py, weather.py",
+            "Holt Daten zeitgesteuert und speichert sie für die Anzeige."
+          ],
+          [
+            "Badlüfter",
+            "fan.py, fan_worker.py, meross_dns.py",
+            "Verarbeitet Start/Stop und die gespeicherte Abschaltfrist."
+          ],
+          [
+            "Betrieb",
+            "deploy/, maintenance.py, backup_status.py",
+            "Start bei Boot, Zeitpläne, Archiv und Sicherungsstatus."
+          ]
+        ]
+      }
+    },
+    {
+      "title": "Dauerbetrieb auf dem Pi",
+      "paragraphs": [
+        "systemd startet die dauerhaft laufenden Dienste und führt Timer-Aufgaben aus. Jeder Timer startet den gleichnamigen Service. Der Browser muss dafür nicht geöffnet sein.",
+        "Gezielte update-*.sh-Skripte übertragen Änderungen und führen die erforderlichen Neustarts aus. Vor einem Datenbank-Restore alle schreibenden Dienste und Timer stoppen; Einzelheiten in BETRIEB.md und den Funktionsanleitungen."
+      ],
+      "table": {
+        "headers": [
+          "Dienst / Timer",
+          "Ausführung",
+          "Aufgabe"
+        ],
+        "rows": [
+          [
+            "marstek-web",
+            "Dauerhaft",
+            "Weboberfläche und lokale API"
+          ],
+          [
+            "marstek-collector",
+            "Dauerhaft, alle 5 s",
+            "Shelly-Messungen und Autolade-Erkennung"
+          ],
+          [
+            "marstek-battery",
+            "Dauerhaft, alle 30 s",
+            "Akku-Messungen, Entladegrenze, Buttonaufträge"
+          ],
+          [
+            "marstek-fan",
+            "Dauerhaft",
+            "Badlüfter mit Abschaltfrist"
+          ],
+          [
+            "marstek-solaredge.timer",
+            "Zeitgesteuert",
+            "PV-Leistung und Tageserträge"
+          ],
+          [
+            "marstek-forecast.timer",
+            "Zeitgesteuert",
+            "PV-Prognosen"
+          ],
+          [
+            "marstek-tibber.timer",
+            "Zeitgesteuert",
+            "Tibber-Preise"
+          ],
+          [
+            "marstek-weather.timer",
+            "Alle 15 min",
+            "Wettermodelltemperatur"
+          ],
+          [
+            "marstek-observer.timer",
+            "Alle 15 min",
+            "Nur Kosten-Beobachtungsplan"
+          ],
+          [
+            "marstek-maintenance.timer",
+            "Täglich",
+            "Archivierung und Pi-Sicherungen"
+          ]
+        ]
+      }
+    },
+    {
+      "title": "Messwerte und Datenbank",
+      "paragraphs": [
+        "Der Shelly wird alle fünf Sekunden abgefragt. Gespeichert werden die Gesamtwirkleistung und je Phase Wirkleistung, Spannung und Strom sowie Zeitstempel und Abfragefehler. Positive Gesamtleistung bedeutet Netzbezug, negative Einspeisung.",
+        "SQLite liegt standardmäßig unter data/measurements.db. Rohmessungen werden nach 30 Tagen zu Minutenwerten mit Mittelwert, Minimum, Maximum und Anzahl verdichtet. Messlücken bleiben erkennbar. Weitere Tabellen speichern SolarEdge-Werte und Tageserträge, Prognosen, Tibber-Preise und Ladeerkennungsereignisse.",
+        "Die eingerichtete Mac-Sicherung läuft täglich um 04:15 Uhr und hält sieben erfolgreiche Sicherungen vor. Der Mac muss angemeldet sein und den Pi erreichen können; ein verpasster Termin wird beim Aufwachen nachgeholt."
+      ]
+    },
+    {
+      "title": "Autoladen erkennen",
+      "paragraphs": [
+        "Die Erkennungsleistung ist Netzbezug plus aktuelle Marstek-Abgabe. Über der eingestellten Startschwelle für die Bestätigungsdauer wird Autoladen vermutet. Unter der Endschwelle wird die Einschätzung beendet. Vorgabe sind 2.000/1.000 W und drei Minuten; aktuelle Werte stehen kompakt im Dashboard und sind unter Einstellungen änderbar.",
+        "Als zweiter Weg aktiviert eine durchgängige Akku-Abgabe von mindestens 750 W über zehn Minuten den Dauerlastschutz. Beide Schutzwege verwenden die einstellbare Entladegrenze von standardmäßig 200 W und überstimmen Morgenfreigabe, Prognose und Nachtreserve. Eine neue Schutzabsenkung darf sofort erfolgen; die spätere Erhöhung hält den Marstek-Mindestabstand ein.",
+        "Messfehler oder Lücken über 15 Sekunden setzen die Prüfzeit zurück. Nach einem Neustart bleibt die letzte Einschätzung erhalten, die Prüfzeit beginnt neu. Die Erkennung ist eine Schätzung: Andere Dauerlasten können auslösen und PV kann Last verdecken.",
+        "Von 05:00 bis 10:00 Uhr gilt bis zur SOC-Schutzgrenze durchgehend eine Freigabe von 800 W. Ein Wasserkocher benötigt keine Auslösung und kein Energiebudget. Bei 12 % stoppt die automatische Entladung.",
+        "Für die Nacht ab 22:00 Uhr werden standardmäßig 1,6 kWh zuzüglich 10 % Verlustaufschlag vorgesehen. Bei 5,12 kWh Kapazität ergibt das rund 46,4 % Ziel-SOC. Vor Nachtbeginn begrenzt die Regel unterhalb dieses Ziels vorsichtig auf die Reserveleistung, außer die verbleibende PV-Prognose deckt die fehlende Energie plus Sicherheitsreserve. Nachts wird aus 1,6 kWh über sieben Stunden eine Mindestfreigabe von 250 W berechnet, damit die reservierte Energie auch nutzbar ist.",
+        "Die SOC-Schwellen, zugehörigen Leistungen, Zeiten, Nachtenergie, Verlustaufschlag, Prognosepuffer und Schutzgrenze sind unter Einstellungen justierbar. Fallende Sicherheitsstufen wirken sofort; Erhöhungen benötigen drei Prozentpunkte Hysterese."
+      ]
+    },
+    {
+      "title": "SolarEdge und PV-Prognose",
+      "paragraphs": [
+        "SolarEdge-Leistungswerte werden tagsüber alle 15 Minuten abgerufen. Der Tagesertrag wird stündlich abgefragt. Im regulären Betrieb sind zusammen bis zu 78 Anfragen pro Tag vorgesehen; die Cloud-Werte können verzögert sein.",
+        "Forecast.Solar liefert die PV-Prognose für den lokal konfigurierten Anlagenstandort. Name, Koordinaten, Spitzenleistung, Ausrichtung und Neigung stammen aus der nicht veröffentlichten forecast.toml. Der Abruf erfolgt tagsüber alle zwei Stunden. Prognose und gemessene SolarEdge-Leistung werden gemeinsam dargestellt. Die Prognose ist keine Messung des verfügbaren Überschusses.",
+        "Der Windy-Button öffnet eine externe ECMWF-Wolkenkarte mit den vorgegebenen Koordinaten 54.269 / 9.782. Sie wird erst beim Öffnen geladen und beim Schließen entladen. Die Karte verändert keine gespeicherten PV-Prognosen."
+      ]
+    },
+    {
+      "title": "Tibber und günstige Zeitfenster",
+      "paragraphs": [
+        "Die Anwendung speichert veröffentlichte Tibber-Viertelstundenpreise. Ein stündlicher Abruf prüft bei Bedarf auf fehlende Preise; bereits vollständig gespeicherte Tage werden wiederverwendet. Fehlende Preise werden nicht geschätzt.",
+        "Hellblau markiert das günstigste Preisviertel des gewählten Tages. Eine Linie kennzeichnet 9 ct/kWh Einspeisevergütung. Ein gelbes Band markiert potenziell ausreichend PV: mindestens etwa 3,61 kW Erzeugung für 160 W Grundlast und 3,45 kW Laden. Weitere Verbraucher und Speicherbetrieb können den Überschuss verringern. Es erfolgt keine automatische Ladeplanung.",
+        "Vergütung, Grundlast und Ladestrom sind einstellbar; genannte Zahlen sind Vorgaben. Das historische PV-Band wird aus dem letzten Prognosestand des Tages und aktuellen Einstellungen neu berechnet, nicht als damaliges Ereignis gespeichert.",
+        "Die Live-Kachel zeigt einen Miniaturverlauf der bereits geladenen heutigen Viertelstundenpreise und markiert das aktuelle Viertel. Die Datumsauswahl der großen Grafik verändert diesen heutigen Verlauf nicht. Der Link führt zur großen Tibber-Grafik; dafür erfolgt kein zusätzlicher API-Abruf.",
+        "Version 1.48.0 zeigt Tagestief und Tageshoch der heute veröffentlichten Viertelstunden direkt in der Tibber-Live-Kachel. Beide Werte verwenden den bereits geladenen heutigen Datensatz und bleiben von der Datumsauswahl der großen Grafik getrennt; unvollständige Tagespreise werden gekennzeichnet."
+      ]
+    },
+    {
+      "title": "Konfiguration und Pflege",
+      "paragraphs": [
+        "config.toml enthält die lokalen Einstellungen, forecast.toml die PV-Konfiguration. SolarEdge- und Tibber-Zugangsdaten stehen separat in secrets.toml. Zugangsdaten werden auf dieser Dokumentationsseite nicht ausgegeben.",
+        "Die Versionsnummer, diese Dokumentation und der Versionsverlauf werden zentral in project_info.json gepflegt. Bei jeder ausgelieferten Änderung werden Version und Verlauf aktualisiert. Fehlerkorrekturen erhöhen die letzte Stelle, neue Funktionen die mittlere Stelle, inkompatible Änderungen die erste Stelle.",
+        "Weitere technische Anleitungen liegen im Projekt: README.md, DASHBOARD.md, AUFBEWAHRUNG.md, SOLAREDGE.md, PROGNOSE.md, TIBBER.md und AUTOLADEN.md. Marstek-Steuerung ist weiterhin ein offener Ausbauschritt.",
+        "README.md ist der Einstieg. BETRIEB.md dokumentiert Betrieb und Wiederherstellung, PARAMETER.md die Einstellwerte und TECHNIK.md Module, Tabellen und APIs. Die Unterlagen liegen im Projektordner auf Mac und nach dem Update auf dem Pi."
+      ]
+    },
+    {
+      "title": "Systemstatus",
+      "paragraphs": [
+        "Die beiden Ringe zeigen Energiequellen (PV, Netzbezug, Akku-Abgabe) und Energieziele (Hausverbrauch, Einspeisung, Akku-Ladung). Hausverbrauch = PV + Netzbezug + Akku-Abgabe − Einspeisung − Akku-Ladung. Alle Größen beziehen sich auf die AC-Seite.",
+        "Akku-Energien werden aus den gespeicherten Leistungsmessungen integriert. Fehler und Abstände über 90 Sekunden werden nicht überbrückt. Für farbige Ringe sind mindestens 95 % Netz- und Akku-Abdeckung erforderlich; sonst werden vorhandene Teilmengen ohne Prozentanteile gezeigt.",
+        "Heute werden Netz- und Akku-Flüsse bis zum Abrufzeitpunkt des SolarEdge-Tagesertrags ausgewertet. Während des PV-Tages gilt ein mehr als zwei Stunden alter Wert als veraltet. Nach dem lokalen Sonnenuntergang bleibt ein höchstens 30 Minuten davor abgerufener Wert bis Mitternacht gültig; die Bilanz wird nicht über den Abrufzeitpunkt hinaus hochgerechnet. SolarEdge kann weiterhin zeitlich verzögert sein. Die Ringe beschreiben Energieflüsse; die Herkunft des Akku-Stroms und der Autarkiegrad bleiben unbekannt.",
+        "Die Ringmitten zeigen die jeweilige Summe mit genau einer Nachkommastelle in kWh. Der Zeitstempel benennt das Ende des Bilanzzeitraums, nicht den Browserabruf. Bei unvollständiger Bilanz bleibt die Summe nicht bestimmbar."
+      ]
+    },
+    {
+      "title": "Tagesbilanz und Ladephasen",
+      "paragraphs": [
+        "Die Tagesbilanz integriert vorhandene Leistungsmessungen getrennt nach Netzbezug und Einspeisung. Sie ist eine Näherung, keine Ablesung der Shelly-Energiezähler. Messlücken werden nicht aufgefüllt. Ohne auswertbare Messdauer wird kein Nullverbrauch behauptet.",
+        "Für ältere verdichtete Daten werden Minutenmittel verwendet; Richtungswechsel innerhalb einer Minute können dadurch unterschätzt werden. Datenabdeckung und nicht erfasste Minuten beziehen sich auf den gewählten Tag bis jetzt beziehungsweise bis Tagesende.",
+        "Grüne Flächen zeigen vermutete Autoladephasen ab dem bestätigten Erkennungszeitpunkt, beschränkt auf Abschnitte mit Messdaten. Sie stellen keinen Nachweis einer tatsächlichen Fahrzeugladung dar.",
+        "Ab Version 1.8.3 werden vergangene Tagesansichten bei Auswahl geladen und nicht laufend neu abgefragt. Der Webserver hält bis zu acht abgeschlossene Tage für jeweils 60 Sekunden im Arbeitsspeicher. Erneute Auswahl lädt nach Ablauf des Zwischenspeichers neu. Aktuelle Messwerte aktualisieren sich weiterhin alle fünf Sekunden.",
+        "Im Leistungsverlauf verschieben „Tag zurück“ und „Tag vor“ das aktuell gewählte Kalenderdatum jeweils um einen Tag. „Heute“ springt auf den laufenden Tag; das Datumsfeld bleibt für direkte Auswahl erhalten.",
+        "Der Sieben-Tage-Vergleich zeigt jeweils eine ISO-Kalenderwoche von Montag bis Sonntag. Vorherige, aktuelle und folgende Woche lassen sich direkt wählen. Vollständig berechnete vergangene Tage bleiben in SQLite gespeichert; eine neuere SolarEdge-Tagesmeldung verwirft den betreffenden Cacheeintrag automatisch."
+      ]
+    },
+    {
+      "title": "Status der Mac-Sicherung",
+      "paragraphs": [
+        "Nach Prüfung und Speicherung einer Sicherung meldet der Mac Erfolg an den Pi. Ein separater eingeschränkter SSH-Schlüssel erlaubt ausschließlich Erfolg-/Fehlerrückmeldungen. backup_status speichert die letzte erfolgreiche Rückmeldung sowie den letzten gemeldeten Versuch.",
+        "Bei einem fehlgeschlagenen Versuch zeigt die Statuskarte dessen Zeitpunkt; die Meldung weist darauf hin, dass die letzte erfolgreiche Kopie erhalten bleibt. Nach 36 Stunden ohne erfolgreiche Rückmeldung gilt eine zuvor bestätigte Sicherung als überfällig.",
+        "Der Mac-Runner verhindert während einer laufenden Übertragung den Ruhezustand, komprimiert den SSH-Datenstrom und beginnt einen abgebrochenen Transfer genau einmal neu. Auf dem Mac entsteht weiterhin eine unveränderte, geprüfte SQLite-Datei. Der Zeitplan bleibt täglich 04:15 Uhr."
+      ]
+    },
+    {
+      "title": "Justierbare Parameter",
+      "paragraphs": [
+        "Autoladen: Start-/Endschwelle, Bestätigungsdauer, Messlücke und Schutzleistung. Dauerlast: Akku-Abgabeschwelle und Dauer. Vorgaben sind 2.000/1.000 W, drei Minuten sowie 750 W über zehn Minuten; beide Schutzwege begrenzen standardmäßig auf 200 W.",
+        "Akku-Zeitregel: Morgenfreigabe Ein/Aus, 05:00–10:00 Uhr, 800 W und 12 % Schutzgrenze. Nachtbeginn 22:00 Uhr, Bedarf 1,6 kWh, Verlustaufschlag 10 % und zusätzlicher Prognosepuffer 1,0 kWh.",
+        "SOC-Profil: Schwellen 60/40/20 % mit 800/300/100/100 W. Unter oder bei der Schutzgrenze gilt 0 W. Schwellen und Leistungen sind vollständig einstellbar.",
+        "Alle Einstellungen liegen in SQLite preferences; Änderungen werden in preference_changes protokolliert. Bestehende gespeicherte Werte bleiben erhalten, ersetzte alte Morgenbudget-Parameter werden beim nächsten Speichern entfernt.",
+        "Das Dashboard hat keine Benutzeranmeldung; Einstellungen sind nur in einem vertrauenswürdigen Heimnetz oder über den eingerichteten VPN-Zugang zu verwenden."
+      ]
+    },
+    {
+      "title": "PV-Schwelle einstellen",
+      "paragraphs": [
+        "Hausgrundlast (Vorgabe 160 W) und dreiphasiger Ladestrom (Vorgabe 5 A) sind im Einstellungsdialog veränderbar. Die erforderliche PV-Leistung ist Grundlast + 3 × 230 V × Ladestrom. Bei 7 A und 160 W sind dies 4.990 W.",
+        "Diese Werte dienen nur der Prognosemarkierung und stellen keinen Ladestrom am Fahrzeug ein. Bestehende Einstellungen bleiben beim Update erhalten. Historische Diagramme werden mit den aktuell gespeicherten Parametern ausgewertet."
+      ]
+    },
+    {
+      "title": "Energieringe und Speicher",
+      "paragraphs": [
+        "Die beiden Ringe zeigen Energiequellen (PV, Netzbezug, Akku-Abgabe) und Energieziele (Hausverbrauch, Einspeisung, Akku-Ladung). Hausverbrauch = PV + Netzbezug + Akku-Abgabe − Einspeisung − Akku-Ladung. Alle Größen beziehen sich auf die AC-Seite.",
+        "Akku-Energien werden aus den gespeicherten Leistungsmessungen integriert. Fehler und Abstände über 90 Sekunden werden nicht überbrückt. Für farbige Ringe sind mindestens 95 % Netz- und Akku-Abdeckung erforderlich; sonst werden vorhandene Teilmengen ohne Prozentanteile gezeigt.",
+        "Heute werden Netz- und Akku-Flüsse bis zum Abrufzeitpunkt des SolarEdge-Tagesertrags ausgewertet. Während des PV-Tages gilt ein mehr als zwei Stunden alter Wert als veraltet. Nach dem lokalen Sonnenuntergang bleibt ein höchstens 30 Minuten davor abgerufener Wert bis Mitternacht gültig; die Bilanz wird nicht über den Abrufzeitpunkt hinaus hochgerechnet. SolarEdge kann weiterhin zeitlich verzögert sein. Die Ringe beschreiben Energieflüsse; die Herkunft des Akku-Stroms und der Autarkiegrad bleiben unbekannt.",
+        "Die Ringmitten zeigen die jeweilige Summe mit genau einer Nachkommastelle in kWh. Der Zeitstempel benennt das Ende des Bilanzzeitraums, nicht den Browserabruf. Bei unvollständiger Bilanz bleibt die Summe nicht bestimmbar.",
+        "Seit Version 1.24.0 zeigen zwei zusätzliche Ringe tatsächliche Netzbezugskosten sowie Einspeiseerlös, geschätzten PV-Eigenverbrauchsvorteil und den Bruttowert der Akku-Abgabe. Netzbezug wird mit den gespeicherten Tibber-Viertelstundenpreisen bewertet. Der Akku-Bruttowert enthält mangels Herkunftszuordnung keine Ladekosten, Verluste oder Verschleiß. Unter 95 Prozent Preisabdeckung oder bei unvollständiger Energiebilanz bleiben die Geldwerte als nicht bestimmbar gekennzeichnet.",
+        "Seit Version 1.24.1 fasst ein Satz unter den Geldringen die Netzstromkosten, die rechnerische Ersparnis aus PV-Eigenverbrauch und Akku-Abgabe sowie die Einspeisevergütung zusammen. Historische Ansichten nennen das gewählte Datum; unvollständige Zeiträume zeigen keine geschätzten Beträge.",
+        "Version 1.25.0 ergänzt den tatsächlichen Bezugspreis als intervallgenaue Netzbezugskosten je bewerteter Bezugskilowattstunde. Der effektive Haushaltsstrompreis entspricht Netzbezugskosten abzüglich Einspeisevergütung, geteilt durch den Hausverbrauch. Grundgebühr sowie Investitions-, Lade-, Verlust- und Verschleißkosten sind nicht enthalten; bei Nullmengen oder unvollständigen Daten erscheint kein Preis.",
+        "Seit Version 1.27.0 öffnet ein Button am Nutzen-Ring ein Balkendiagramm der letzten zehn Kalendertage. Es erklärt Formel, Farben und Grenzen direkt im Dialog, kennzeichnet den heutigen Teilwert sowie unvollständige Tage und zeigt Wochentag und Datum. Die Berechnung liest nur SQLite; abgeschlossene vollständige Tage werden höchstens eine Stunde im Webprozess zwischengespeichert.",
+        "Version 1.27.1 verwendet im Zehn-Tage-Diagramm feste Rasterlinien in 5-ct-Schritten. Die Achse enthält immer mindestens −5, 0 und +5 ct/kWh, erweitert sich auf Vielfache von fünf und hebt die Nulllinie stärker hervor.",
+        "Version 1.30.0 stellt den Preisverlauf auf sieben Tage je ISO-Kalenderwoche um. Der Dialog zeigt Kalenderwoche und Datumsbereich und blättert wochenweise zurück oder vor; zukünftige und unvollständige Tage bleiben als Lücke sichtbar.",
+        "Version 1.46.0 ergänzt die heutige Energiebilanz als sechste Kachel der Live-Übersicht. Sie zeigt Quellen, Ziele, Kosten, Nutzen, effektiven Haushaltsstrompreis und SOC-Verlauf aus den bereits geladenen Verlaufsdaten; die untere Datumsauswahl verändert diese Live-Kachel nicht. Auf breiten Bildschirmen und dem iPad im Querformat stehen sechs Kacheln in einem Raster aus drei Spalten und zwei Zeilen.",
+        "Version 1.46.1 hebt den effektiven Haushaltsstrompreis in der kompakten Tagesbilanz größer und gelb hervor."
+      ]
+    },
+    {
+      "title": "Mac-Hintergrundsicherung ab 1.7.1",
+      "paragraphs": [
+        "repair-mac-backup.sh installiert eine eigenständige Kopie unter ~/Library/Application Support/EnergyPi. Der Hintergrundlauf liest keine Dateien aus Documents und verwendet keine dortige Python-Umgebung. SQLite-Prüfung erfolgt mit /usr/bin/sqlite3.",
+        "Sicherungen und Logs liegen dort im Unterordner backups; sieben erfolgreiche neue Sicherungen bleiben erhalten. Bisherige Sicherungen im Projekt bleiben unverändert. Zwei bestehende eingeschränkte SSH-Schlüssel werden weiterverwendet.",
+        "Der Installer startet einen echten launchd-Test. Erst die Logmeldung Sicherung und Rückmeldung erfolgreich bestätigt den Hintergrundlauf. Mac-Anmeldung und Erreichbarkeit des Pi sind weiterhin erforderlich. Nach hartem Abbruch kann backups/.running zurückbleiben; vor Entfernen muss ausgeschlossen werden, dass ein Sicherungslauf aktiv ist."
+      ]
+    },
+    {
+      "title": "Anordnung der Tageswerte",
+      "paragraphs": [
+        "Oben steht stets der SolarEdge-Tagesertrag heute mit Abrufzeitpunkt. Darunter stehen Prognose heute (mit Restprognose) und Prognose morgen untereinander. Die Datumsauswahl ändert das Diagramm und den dort angegebenen Tagesertrag; die oberen Kennzahlen bleiben auf heute/morgen bezogen."
+      ]
+    },
+    {
+      "title": "Lüfter Bad",
+      "paragraphs": [
+        "Der Button links neben dem Messstatus öffnet Start, Neustart der Laufzeit und Ausschalten. Die Laufzeit ist in Einstellungen von 1 bis 120 Minuten wählbar; Vorgabe 20 Minuten. Änderungen gelten erst beim nächsten Start.",
+        "Der Dienst marstek-fan verwendet die Meross-Cloud und Zugangsdaten aus secrets.toml. Er bindet genau eine MSS210 namens Lüfter Bad an ihre UUID. Bei mehreren Treffern oder fehlendem gespeicherten Gerät wird nicht geschaltet.",
+        "Die Frist wird vor dem Einschalten in fan_state gespeichert. Nach Neustart wird eine abgelaufene Anforderung ausgeschaltet, nicht erneut eingeschaltet. Ohne Geräteantwort bleiben Zustand und Abschaltung unbestätigt. Pi-, Internet- und Cloud-Ausfälle können die Abschaltung verzögern. Kein verifizierter geräteinterner Timer wird verwendet.",
+        "Manuell außerhalb von EnergyPi eingeschaltete Geräte erhalten keinen automatischen Timer. Während eines EnergyPi-Timers setzt der Dienst den angeforderten Zustand durch; zum vorzeitigen Beenden den EnergyPi-Ausschaltbutton verwenden. Dashboard-Zugriff erlaubt Schaltanforderungen im lokalen Netz."
+      ]
+    },
+    {
+      "title": "Anlagenübersicht und Zuständigkeiten",
+      "paragraphs": [
+        "Pi 3 Model B Rev 1.2 und Shelly Pro 3EM verwenden lokal konfigurierte Adressen. SolarEdge SE7K speist dreiphasig ein; Marstek Venus E V2 ist laut Nutzer auf Phase A. NRGkick lädt dreiphasig. Aus Phase A allein lässt sich die Akkuleistung nicht bestimmen.",
+        "EnergyPi erfasst Daten, steuert den Meross-Lüfter und begrenzt ab 1.11.0 die Marstek-Entladeleistung bei Autoladen. Die Eigenverbrauchsregelung bleibt im Marstek; Daikin ist noch nicht implementiert.",
+        "Steckeradern laut Nutzer: 1 Rot, 2 Gelb, 3 Weiß, 4 Schwarz, 5 blank. Dies ist keine bestätigte Signalbelegung oder Lötfreigabe. Spannungsprüfung und Modbus-Lesetest wurden am konkreten Gerät erfolgreich durchgeführt; kein universeller Pinout-Nachweis."
+      ]
+    },
+    {
+      "title": "Parameterreferenz",
+      "paragraphs": [
+        "Vorgaben, nicht die aktuellen Pi-Einstellungen. Die gespeicherten Werte stehen im Einstellungsdialog. Änderungen werden in SQLite protokolliert."
+      ],
+      "table": {
+        "headers": [
+          "Parameter",
+          "Vorgabe",
+          "Erlaubt",
+          "Wirkung"
+        ],
+        "rows": [
+          [
+            "Startschwelle",
+            "2000 W",
+            "größer als Endschwelle, höchstens 100.000 W",
+            "Strikt darüber startet die Bestätigungszeit für vermutetes Autoladen."
+          ],
+          [
+            "Endschwelle",
+            "1000 W",
+            "0 bis unter Startschwelle",
+            "Strikt darunter startet die Bestätigungszeit für das Ende."
+          ],
+          [
+            "Bestätigungsdauer",
+            "180 s",
+            "1–3600 s",
+            "Gilt für Beginn und Ende; kurze Überschreitungen reichen nicht."
+          ],
+          [
+            "Dauerlastschutz-Leistung",
+            "750 W",
+            "50–800 ganze W",
+            "Ab dieser Marstek-Abgabe beginnt die unabhängige Schutzfrist."
+          ],
+          [
+            "Dauerlastschutz-Dauer",
+            "600 s / 10 min",
+            "60–3600 ganze s",
+            "Nach durchgängiger hoher Akku-Abgabe wird die Entladegrenze gesetzt."
+          ],
+          [
+            "Maximale Messlücke",
+            "15 s",
+            "mindestens 2 × Abfrageintervall, höchstens 3600 s",
+            "Größere Lücken setzen eine laufende Prüfung zurück; bei 5-s-Abfrage mindestens 10 s."
+          ],
+          [
+            "Marstek-Mindestabstand",
+            "900 s / 15 min",
+            "60–86.400 s / 1–1440 min",
+            "Mindestabstand zwischen allen Entladegrenzen-Schreibversuchen einschließlich Rücksetzung; keine Wirkung auf Messabfragen."
+          ],
+          [
+            "Einspeisevergütung",
+            "9 ct/kWh",
+            "0–100 ct/kWh",
+            "Vergleichslinie und Preiskennzeichnung, auch rückwirkend mit dem aktuellen Wert."
+          ],
+          [
+            "Hausgrundlast",
+            "160 W",
+            "0–10.000 W",
+            "Wird von der PV-Prognose abgezogen; keine laufend gemessene Grundlast."
+          ],
+          [
+            "Angenommener Ladestrom",
+            "5 A",
+            "1–32 A",
+            "Nur PV-Fenster: Ladeleistung = 3 × 230 V × Strom. Kein Befehl an NRGkick; Wertebereich keine Freigabe eines realen Ladestroms."
+          ],
+          [
+            "Lüfterlaufzeit",
+            "20 min",
+            "1–120 ganze Minuten",
+            "Gilt für den nächsten Start/Timerneustart, verändert eine laufende Frist nicht."
+          ],
+          [
+            "Akku-Grenze bei Autoladen",
+            "200 W",
+            "0–800 W, 50-W-Schritte",
+            "Höchstens diese Entladeleistung bei bestätigtem Autoladen oder Dauerlastschutz; Zahlenfeld und Regler verwenden denselben Wert."
+          ],
+          [
+            "Diagrammbeginn",
+            "5 Uhr",
+            "0–23, ganze Stunde",
+            "Beginn der PV-/Akku-Zeitachse"
+          ],
+          [
+            "Diagrammende",
+            "23 Uhr",
+            "1–24, ganze Stunde, nach Beginn",
+            "Ende der PV-/Akku-Zeitachse"
+          ]
+        ]
+      }
+    },
+    {
+      "title": "Betrieb, Sicherung und Wiederherstellung",
+      "paragraphs": [
+        "Dauerläufer: marstek-collector, marstek-web, marstek-fan. Cloud-Abfragen und Wartung sind Timerdienste; ein beendeter oneshot-Dienst muss nicht dauerhaft active sein. Diagnose: systemctl status und journalctl für den betroffenen Dienst.",
+        "Automatische Mac-Sicherungen und Logs liegen unter ~/Library/Application Support/EnergyPi/backups/. Die Datenbanksicherung enthält Messungen, Einstellungen und Lüfteraufträge, aber keinen Programmcode und keine secrets.toml. Diese Dateien separat geschützt sichern.",
+        "Vor Wiederherstellung alle schreibenden Dienste und Timer stoppen, Sicherung prüfen und bisherigen data-Ordner behalten. Keine alten WAL-Dateien übernehmen. Lüfter physisch ausschalten und historische Aufträge vor Dienststart verwerfen. Ausführliche Schritte stehen in BETRIEB.md im Projektordner. Ein kompletter Ersatz-SD-Test ist noch nicht erfolgt.",
+        "Bei Ausfall fehlen Messungen; fehlende Werte sind nicht null. Die Autoerkennung bleibt eine Vermutung. Ohne erreichbare Meross-Cloud ist eine fristgerechte Lüfterabschaltung nicht garantiert. Eine Wiederherstellung oder ein Dokumentationsupdate wurde mit diesem Text nicht automatisch auf dem Pi ausgeführt."
+      ]
+    },
+    {
+      "title": "Wetter und NDR-Radio",
+      "paragraphs": [
+        "Die Meteo-Kachel zeigt den lokal konfigurierten Anlagenstandort groß und Sevilla in Spanien kleiner rechts daneben. Open-Meteo Best Match liefert Modelltemperaturen in 2 m Höhe für beide Orte; es handelt sich nicht um Sensoren vor Ort. Name und Koordinaten des Anlagenstandorts stammen aus der nicht veröffentlichten forecast.toml. Beide Standorte werden alle 15 Minuten unabhängig abgerufen und getrennt in SQLite gespeichert.",
+        "NDR Info und NDR 2 Schleswig-Holstein starten über getrennte Buttons links neben Lüfter Bad. Es läuft höchstens ein Sender je Browser-Tab; beim Umschalten wird die vorherige Streamverbindung beendet. Kein Lautstärkeregler im Dashboard, kein automatischer Start und keine Audioaufzeichnung. NDR öffnen ist der Ausweichlink bei Wiedergabeproblemen.",
+        "Neue Anleitung WETTER_RADIO.md. Kein API-Schlüssel erforderlich; Wetter und Radio benötigen Internet. Audio wird nicht über den Pi geleitet und nicht aufgezeichnet.",
+        "Das Temperatur-Popup zeichnet Anlagenstandort und Sevilla als getrennt beschriftete Kurven auf einer gemeinsamen Skala. Beide Orte erhalten eigene Tagesdetails mit Sonnenaufgang, Sonnenuntergang und Tageslänge. Im Diagramm markieren gelb-orange Linien die lokalen und grün gestrichelte Linien die Sevillaner Sonnenzeiten. Die Berechnung erfolgt lokal aus Datum und Ortskoordinaten ohne weiteren API-Abruf."
+      ]
+    },
+    {
+      "title": "Marstek: Messwerte und Autolade-Begrenzung",
+      "paragraphs": [
+        "Ein eigener Sammler liest den Venus E V2 über Elfin alle 30 Sekunden. Die Akku-Karte zeigt den Ladestand als farbigen Kreisring mit Prozentwert in der Mitte sowie Leistung, Messzeit und Begrenzungsstatus. Veraltete Werte werden abgeblendet.",
+        "Rechts neben dem Ladestandsring stellt ein Regler das gemeinsame Autolade-/Dauerlast-Ziel von 0 bis 800 W in 50-W-Schritten ein. Verschieben zeigt nur einen Entwurf; erst Übernehmen speichert. Die aktuelle Geräte-Entladegrenze bleibt separat sichtbar.",
+        "Bei frischer bestätigter Autolade-Erkennung wird ausschließlich die maximale Entladeleistung (Register 44003) auf standardmäßig 200 W begrenzt. Einstellbar: 0–800 W in 50-W-Schritten. Eine bereits niedrigere Grenze bleibt erhalten. Nach bestätigtem Ende wird der zuvor gespeicherte Wert wiederhergestellt.",
+        "Der konfigurierte Mindestabstand (Vorgabe 15 Minuten) gilt für alle Schreibversuche, auch nach Neustart und bei Rücksetzung. Veraltete Erkennung hält die Grenze fest. Bei externen Änderungen pausiert die Automatik. Bei Ausfall von Pi oder Verbindung kann die gesetzte Grenze bestehen bleiben.",
+        "marstek_samples enthält Messwerte, marstek_control_state den Wiederanlaufzustand und marstek_control_events das Befehlsjournal. Keine Moduswechsel oder Zwangsentladung; Eigenverbrauchsmodus erforderlich. Details: MARSTEK.md.",
+        "Der bereits alle 30 Sekunden gespeicherte Ladestand erscheint im PV-Tagesdiagramm als violette Linie mit rechter 0–100-%-Achse. Vergangene Tage nutzen gespeicherte Messwerte; keine Rückrechnung vor Beginn der Erfassung und keine Prognose des zukünftigen Ladestands.",
+        "Eigenverbrauch-Button neben dem Ladestand: ausdrücklich angeforderter Wechsel auf Eigenverbrauch. Der Pi bearbeitet den gespeicherten Auftrag und bestätigt ihn durch Zurücklesen. Der Mindestabstand bleibt erhalten. Bei erkanntem Autoladen wird nötigenfalls zuerst die Entladegrenze gesetzt; beide Registeränderungen bilden einen Wechselvorgang. Kein automatischer Wechsel bei 0 W.",
+        "Die Akku-Karte zeigt die gelesene Betriebsart und maximale Entladeleistung. Im manuellen Modus kennzeichnet die aktuelle AC-Leistung Laden, Entladen oder Pause. Unter Systemstatus stehen die letzten 50 Entscheidungen, neueste zuerst. Anforderungen und Bestätigungen sind getrennt; ältere Bestätigungen ohne gespeicherten Anlass erhalten keinen erfundenen Grund.",
+        "Version 1.47.0 ersetzt den automatischen Netzladevorschlag durch einen ausdrücklich eingegebenen Ladeauftrag. Der Dialog in der Marstek-Kachel bietet Start zum nächsten Viertel, verzögert oder zu einem konkreten Datum mit Uhrzeit sowie Ladeziel nach Energiemenge oder Dauer und eine Leistung von 50 bis 2.500 W.",
+        "Die serverseitige Vorschau berechnet Start, Ende, Netz- und Akkuenergie, Ziel-SOC sowie verfügbare Tibber-Kosten, schreibt aber noch nichts. Erst „Ladeauftrag starten“ speichert den Auftrag. Bis zur Startzeit bleibt der Akku im Eigenverbrauch; Ziel-SOC, Endzeit und Abbruch führen weiterhin sicher zurück in den Eigenverbrauch.",
+        "Zeitplan 6 bleibt reserviert. Vorhandene Aufträge aus früheren Versionen werden weiterhin verarbeitet; die früheren Vorschlagsparameter und der Bestätigungsbutton werden nicht mehr angeboten.",
+        "Version 1.47.1 startet die Auswahl „Jetzt“ beim unmittelbar nächsten Worker-Durchlauf statt am nächsten Viertelstundenbeginn. Nicht gewählte Start- und Zielvarianten werden im Dialog zuverlässig ausgeblendet.",
+        "Version 1.47.2 startet bei der Installation des Dashboard-Pakets auch den Akku-Worker neu. Dadurch verarbeitet er das aktuelle Format manueller Ladeaufträge unmittelbar und verwirft es nicht als alten Testauftrag.",
+        "Version 1.47.3 ergänzt touchgerechte Minus- und Plus-Tasten für Dauer und Ladeleistung sowie direkte Leistungsstufen von 500 bis 2.500 W. Die Zahlenfelder bleiben für freie zulässige Eingaben erhalten.",
+        "Version 1.48.0 zeigt geplanten Start und Ende eines wartenden Ladeauftrags sowie tatsächlichen Start, voraussichtliches Ende und verbleibende Zeit einer aktiven Ladung direkt in der Marstek-Kachel. Der Button unterscheidet Laden, Laden geplant, Laden aktiv, Wird beendet und Laden prüfen.",
+        "Version 1.48.1 ergänzt beim Ladeziel Energiemenge große Minus- und Plus-Tasten in 0,1-kWh-Schritten. Der Ladebutton erhält dieselbe gerahmte, touchgerechte Darstellung wie der Button für die Windy-Wolkenkarte; Statusbeschriftung und Ladefunktion bleiben unverändert."
+      ]
+    },
+    {
+      "title": "Kosten-Beobachtungsmodus",
+      "paragraphs": [
+        "Der Bereich unten zeigt einen simulierten Kostenplan, ohne Befehle an den Akku. Netzladen ist nur rechnerisch erlaubt; die bestehende Autolade-Begrenzung bleibt unabhängig.",
+        "Hausbedarf zunächst als konstanter Einstellwert. Kapazität 5,12 kWh, Wirkungsgrad 85 % und Verschleiß 2 ct/kWh sind Modellannahmen. Weitere Parameter: Reserve, maximaler SOC, PV-Abschlag, Leistung, Vorteilspuffer und Horizont.",
+        "Der Planer vergleicht Viertelstunden unter Leistungs-/Reservegrenzen. Endladestand mindestens Startladestand bzw. Endreserve. Preis-/Prognoselücken verkürzen den Plan; fehlender aktueller Ladestand verhindert eine Planung. Keine garantierte Ersparnis.",
+        "Separate Berechnung alle 15 Minuten; Webanzeige aus SQLite. Neue Einstellungen gelten ab nächster Berechnung; alte Pläne werden gekennzeichnet. Details und Grenzen in BEOBACHTUNG.md."
+      ]
+    },
+    {
+      "title": "Zeitbereich des PV-/Akku-Diagramms",
+      "paragraphs": [
+        "Unter Einstellungen → PV-/Akku-Diagramm · Zeitbereich lassen sich Beginn und Ende in ganzen Stunden einstellen. Vorgabe: 05:00 bis 23:00 Uhr. Beginn 0–23, Ende 1–24; Beginn muss vor Ende liegen.",
+        "Die Zeitachse bezieht sich auf den ausgewählten Tag in Europe/Berlin einschließlich Zeitumstellung. Die Kurven werden auf diesen Ausschnitt begrenzt. Änderungen erscheinen direkt nach Speichern. Tageserträge und Prognosekarten bleiben Ganztageswerte; Datenspeicherung und API-Abrufzeiten ändern sich nicht."
+      ]
+    },
+    {
+      "title": "Eigenversorgung und Energiekosten im Wochenvergleich",
+      "paragraphs": [
+        "Das Finanz-Popup bietet für jede ISO-Kalenderwoche zwei Ansichten: den effektiven Haushaltsstrompreis sowie Eigenversorgung und Energiekosten. Grün zeigt den berechneten Nutzen aus PV-Eigenverbrauch, Einspeisevergütung und Akku-Abgabe; Orange zeigt Netzbezugskosten abzüglich Einspeisevergütung.",
+        "Die Wochenzusammenfassung nennt Nutzen, verbleibende Energiekosten, einen rechnerischen Vergleichswert ohne Eigenversorgung und den Eigenversorgungsanteil. Unvollständige Tage bleiben als Lücke sichtbar. Beim Berühren eines Tages werden die Bestandteile einzeln erklärt.",
+        "Der Akku-Wert ist ein Bruttowert. Ladeverluste, Ladekosten, Verschleiß, Grundgebühren und Anschaffungskosten sind nicht enthalten. Abgeschlossene Tageswerte werden mit einer Versionskennung zwischengespeichert, damit ältere Cache-Inhalte nach Formeländerungen neu berechnet werden."
+      ]
+    },
+    {
+      "title": "Dashboard-Abrufe im Dauerbetrieb",
+      "paragraphs": [
+        "Aktuelle Netzwerte und der 15-Minuten-Durchschnitt werden bei sichtbarer Seite weiterhin alle fünf Sekunden aktualisiert. Der deutlich größere Tagesverlauf wird nur noch alle 30 Sekunden geladen.",
+        "Wechselt EnergyPi in einen unsichtbaren Browser-Tab oder App-Hintergrund, pausieren Status- und Tagesabruf. Eine laufende Tagesanfrage wird abgebrochen, ohne das zuletzt dargestellte Diagramm zu löschen. Beim Zurückkehren werden Livewerte sofort und der Tagesverlauf kurz danach erneuert.",
+        "Überlappende Statusabrufe und doppelte Verlaufstimer werden verhindert. Die Erfassung auf dem Pi bleibt unverändert: Shelly-Messwerte werden weiterhin alle fünf Sekunden gespeichert."
+      ]
+    }
+  ],
+  "releases": [
+    {
+      "version": "1.49.0",
+      "date": "2026-10-24",
+      "changes": [
+        "Shelly-, Elfin- und SSH-Ziele aus dem veröffentlichten Stand in ignorierte lokale Konfigurationsdateien ausgelagert.",
+        "Beispielkonfigurationen und gemeinsame Prüfung durch deploy-common.sh für alle Mac-Update-Skripte ergänzt.",
+        "Persönliche Mac-Pfade, feste Heimnetzadressen und den persönlichen launchd-Namen aus versionierten Dateien entfernt.",
+        "Systemmonitor-Link aus dem aktuellen Dashboard-Host abgeleitet und automatische Veröffentlichungskontrolle ergänzt.",
+        "Den bisherigen zweiten Wetterstandort vollständig durch Sevilla ersetzt; neue Messreihe, Sonnenzeiten, Anzeige, Dokumentation und Tests verwenden die Stadtkoordinaten 37.38620512 / -5.99251368.,",
+        "Name, Koordinaten und PV-Parameter des primären Standorts in die ignorierte lokale forecast.toml verschoben; der veröffentlichte Stand enthält nur eine neutrale Beispielkonfiguration."
+      ]
+    },
+    {
+      "version": "1.48.1",
+      "date": "2026-10-24",
+      "changes": [
+        "Große Minus- und Plus-Tasten für die Energiemenge in 0,1-kWh-Schritten ergänzt.",
+        "Auf direkte Vorgabetasten für die Energiemenge verzichtet.",
+        "Ladebutton in der Marstek-Kachel an die gerahmte, touchgerechte Darstellung des Windy-Wolkenkartenbuttons angepasst."
+      ]
+    },
+    {
+      "version": "1.48.0",
+      "date": "2026-10-24",
+      "changes": [
+        "Tagestief und Tageshoch der heutigen Tibber-Preise in der Live-Kachel ergänzt.",
+        "Ladebutton nach geplantem, aktivem, abbrechendem oder fehlerhaftem Auftrag beschriftet.",
+        "Geplanten beziehungsweise tatsächlichen Start, voraussichtliches Ende und Restzeit direkt in Marstek-Kachel und Ladedialog ergänzt."
+      ]
+    },
+    {
+      "version": "1.47.3",
+      "date": "2026-10-24",
+      "changes": [
+        "Große Minus- und Plus-Tasten für Ladedauer und Ladeleistung ergänzt.",
+        "Direktwahltasten für 500, 1.000, 1.500, 2.000 und 2.500 W ergänzt.",
+        "Touch-Eingabefelder und mobile Anordnung für iPad und Smartphone vergrößert."
+      ]
+    },
+    {
+      "version": "1.47.2",
+      "date": "2026-10-24",
+      "changes": [
+        "Dashboard-Update startet neben dem Webserver jetzt auch den Marstek-Akku-Worker neu.",
+        "Verhindert, dass der weiterlaufende alte Worker manuelle Ladeaufträge im neuen Steuerformat als Testauftrag verwirft."
+      ]
+    },
+    {
+      "version": "1.47.1",
+      "date": "2026-10-24",
+      "changes": [
+        "Startart „Jetzt“ auf den unmittelbar nächsten Akku-Worker-Durchlauf umgestellt.",
+        "Nicht gewählte Start- und Ladeziel-Felder im Ladedialog zuverlässig ausgeblendet."
+      ]
+    },
+    {
+      "version": "1.47.0",
+      "date": "2026-10-24",
+      "changes": [
+        "Automatischen Netzladevorschlag, Bestätigungsbutton und zugehörige Einstellungen aus der Oberfläche entfernt.",
+        "Button „Laden“ rechts in der Marstek-Kachel mit Start jetzt, verzögert oder zu konkretem Datum und Uhrzeit ergänzt.",
+        "Manuelle Ladeziele nach Energiemenge oder Dauer mit frei wählbarer Leistung und serverseitiger Kosten- und SOC-Vorschau ergänzt.",
+        "Zeitplan 6, sicherer verzögerter Start, Abbruch, Rückkehr zum Eigenverbrauch und Weiterführung bestehender Aufträge beibehalten."
+      ]
+    },
+    {
+      "version": "1.46.1",
+      "date": "2026-10-24",
+      "changes": [
+        "Effektiven Haushaltsstrompreis in der kompakten Energiekachel größer und farblich hervorgehoben."
+      ]
+    },
+    {
+      "version": "1.46.0",
+      "date": "2026-10-24",
+      "changes": [
+        "Sechste Live-Kachel mit Quellen, Zielen, Kosten, Nutzen, effektivem Strompreis und Akku-SOC ergänzt.",
+        "Live-Übersicht für iPad quer und breite Bildschirme auf drei Spalten und zwei Reihen umgestellt.",
+        "Kompakte Bilanz dauerhaft an den heutigen Tag gebunden und ohne zusätzlichen API-Abruf aus vorhandenen Verlaufsdaten gespeist."
+      ]
+    },
+    {
+      "version": "1.45.0",
+      "date": "2026-10-23",
+      "changes": [
+        "Drei dauerhaft sichtbare Phasenkacheln aus der Live-Übersicht entfernt.",
+        "Dezenten Link für Phase A, B und C in der Kachel „Aktuelle Netzleistung“ ergänzt.",
+        "Phasenleistung, Spannung und Strom in einem responsiven Popup zusammengeführt."
+      ]
+    },
+    {
+      "version": "1.44.1",
+      "date": "2026-10-23",
+      "changes": [
+        "Tibber-Miniaturverlauf dauerhaft an den heutigen Preisverlauf gebunden.",
+        "Datumsauswahl der großen Tibber-Grafik von der Live-Kachel entkoppelt.",
+        "Bereits geladene Tagesdaten werden weiterverwendet; keine zusätzliche API-Abfrage."
+      ]
+    },
+    {
+      "version": "1.44.0",
+      "date": "2026-10-23",
+      "changes": [
+        "Miniaturverlauf der Tibber-Viertelstundenpreise in der Live-Kachel ergänzt.",
+        "Aktuelles Preisviertel im Miniaturverlauf mit einem hellen Punkt markiert.",
+        "Direktlink von der Preiskachel zur ausführlichen Tibber-Tagesgrafik ergänzt; keine zusätzliche API-Abfrage."
+      ]
+    },
+    {
+      "version": "1.43.7",
+      "date": "2026-10-23",
+      "changes": [
+        "Energieanteile bleiben nach Sonnenuntergang berechenbar, wenn der letzte SolarEdge-Tageswert höchstens 30 Minuten vor Sonnenuntergang abgerufen wurde.",
+        "Der gemeinsame Bilanzstand bleibt auf den tatsächlichen SolarEdge-Abrufzeitpunkt begrenzt; fehlende Minuten werden nicht geschätzt.",
+        "Die bisherige Zwei-Stunden-Altersprüfung bleibt während der möglichen PV-Produktion und für deutlich ältere Tageswerte erhalten."
+      ]
+    },
+    {
+      "version": "1.43.6",
+      "date": "2026-10-23",
+      "changes": [
+        "Anlagenstandort im Temperatur-Popup durchgehend in Orangeabstufungen dargestellt.",
+        "Sevilla im Temperatur-Popup durchgehend in Grünabstufungen dargestellt.",
+        "Temperaturkurven, Legende, Sonnenzeiten und Tagesdetailkarten farblich je Ort vereinheitlicht."
+      ]
+    },
+    {
+      "version": "1.43.5",
+      "date": "2026-10-22",
+      "changes": [
+        "Entscheidungsprotokoll im Dashboard ebenfalls standardmäßig eingeklappt.",
+        "Überschrift und Hinweis auf die letzten 50 Einträge bleiben sichtbar.",
+        "Protokollierung, Speicherung und vorhandene Einträge unverändert beibehalten."
+      ]
+    },
+    {
+      "version": "1.43.4",
+      "date": "2026-10-22",
+      "changes": [
+        "Akku-Bewirtschaftung im Dashboard standardmäßig eingeklappt.",
+        "Überschrift und aktueller Planstatus bleiben auch im geschlossenen Zustand sichtbar.",
+        "Berechnung, Speicherung, Tabelle und Netzladefunktionen unverändert beibehalten."
+      ]
+    },
+    {
+      "version": "1.43.3",
+      "date": "2026-10-22",
+      "changes": [
+        "Eigenverbrauchsauftrag stellt eine zuvor von EnergyPi abgesenkte Entladegrenze sofort bis zur bekannten Ausgangsgrenze wieder her.",
+        "SOC-, Autolade- und Dauerlastschutz bleiben bei der ausdrücklichen Freigabe wirksam.",
+        "Der 15-Minuten-Abstand bleibt für automatische Erhöhungen bestehen; ein reiner Moduswechsel blockiert keine anschließende notwendige Grenzwertkorrektur."
+      ]
+    },
+    {
+      "version": "1.43.2",
+      "date": "2026-10-21",
+      "changes": [
+        "Ortsbezug der astronomischen Berechnung verständlich als Anlagenstandort beziehungsweise Sevilla beschrieben.",
+        "Sevillaner Sonnenaufgang und Sonnenuntergang als grüne gestrichelte Linien mit Uhrzeit in das Temperaturdiagramm aufgenommen.",
+        "lokalen Sonnenzeiten bleiben gelb-orange dargestellt."
+      ]
+    },
+    {
+      "version": "1.43.1",
+      "date": "2026-10-21",
+      "changes": [
+        "Wetter-Popup um eigene Tagesdetails für Sevilla mit Sonnenaufgang, Sonnenuntergang und Tageslänge ergänzt.",
+        "Sonnenzeiten beider Orte lokal aus Datum und Koordinaten berechnet; keine zusätzlichen API-Anfragen.",
+        "Tagesdetails auf breiten Ansichten nebeneinander und auf schmalen Ansichten untereinander angeordnet."
+      ]
+    },
+    {
+      "version": "1.43.0",
+      "date": "2026-10-21",
+      "changes": [
+        "Meteo-Kachel um die kleinere Temperaturanzeige für Sevilla in Spanien ergänzt.",
+        "Sevilla unabhängig von Anlagenstandort alle 15 Minuten über Open-Meteo erfasst und in eigenen SQLite-Tabellen gespeichert.",
+        "Temperatur-Popup um eine zweite beschriftete Verlaufskurve, gemeinsame Skala und getrennte Wertebereiche ergänzt."
+      ]
+    },
+    {
+      "version": "1.42.1",
+      "date": "2026-10-19",
+      "changes": [
+        "Vollständige Akku-Beobachtungspläne auf 14 Tage begrenzt; der jeweils jüngste Plan bleibt unabhängig vom Alter erhalten.",
+        "Bereinigung auf höchstens 500 Beobachtungspläne je Wartungslauf begrenzt und weiterhin erst nach geprüftem Snapshot ausgeführt.",
+        "Netzladeaufträge, Entscheidungsprotokolle, Messwerte und Energiearchive bleiben von dieser Regel unberührt.",
+        "Datenpflege-Anzeige von Journalzeilen auf alte Datensätze präzisiert."
+      ]
+    },
+    {
+      "version": "1.42.0",
+      "date": "2026-10-19",
+      "changes": [
+        "Lesende Bestandsanalyse für alle langfristig wachsenden Mess-, Prognose-, Preis- und Cachetabellen ergänzt.",
+        "Zeilenzahl, Zeitspanne, optionaler SQLite-Seitenbedarf und Veränderung zum vorherigen Wartungslauf werden im begrenzten Wartungsstatus gespeichert.",
+        "Datenaufbewahrung im Systemstatus ergänzt; die Analysephase kennzeichnet ausdrücklich, dass Originaldaten vollständig erhalten bleiben.",
+        "Keine neue Messwert-Archivtabelle und kein Löschpfad aktiviert; tatsächliche Pi-Bestandswerte bilden die Voraussetzung für die nächste Stufe."
+      ]
+    },
+    {
+      "version": "1.41.0",
+      "date": "2026-10-19",
+      "changes": [
+        "Integritätsprüfung und SQLite-Sicherung als beendbare Unterprozesse mit eigenen Zeitgrenzen ausgeführt.",
+        "Shelly-Archivierung auf zehn Minuten und 20.000 Minutenblöcke pro Lauf begrenzt; Rückstand wird gespeichert und am Folgetag fortgesetzt.",
+        "Speicherplatzprüfung mit 1,5-facher Datenbankgröße plus 500 MiB Reserve vor jeder Sicherung ergänzt.",
+        "Alte Teilkopien kontrolliert unter Wartungssperre entfernt und Sicherungsexport zum Mac auf 15 Minuten begrenzt.",
+        "Systemstatus um Wartungsphase, Laufzeit, Sicherungsgröße, Archivmenge und verbleibenden Rückstand erweitert.",
+        "systemd beendet die gesamte Prozessgruppe nach maximal 30 Minuten und räumt Kindprozesse kontrolliert auf."
+      ]
+    },
+    {
+      "version": "1.40.1",
+      "date": "2026-10-19",
+      "changes": [
+        "SQLite-Sicherung auf einen zusammenhängenden Backup-Schritt umgestellt, damit fortlaufende Collector-Schreibvorgänge den Kopiervorgang nicht dauerhaft verlängern.",
+        "Auch der vor der Installation ausgeführte Sicherungslauf wird nach spätestens 30 Minuten kontrolliert beendet."
+      ]
+    },
+    {
+      "version": "1.40.0",
+      "date": "2026-10-19",
+      "changes": [
+        "Erste sichere Aufbewahrungsstufe für Abrufversuche, Ereignisjournale und abgeschlossene Bedienaufträge ergänzt; Energie- und Messreihen bleiben vollständig erhalten.",
+        "Vor jedem Bereinigungslauf wird ein geprüfter SQLite-Snapshot erstellt; je Tabelle werden höchstens 10.000 alte Zeilen in einer kurzen Transaktion entfernt.",
+        "Offene Geräteaufträge und der jeweils jüngste Diagnoseeintrag bleiben erhalten; Ergebnis und Restmenge werden ohne weiteres Tabellenwachstum gespeichert.",
+        "Datenpflege im Systemstatus ergänzt; Wartungssperre auf 60 Sekunden und systemd-Laufzeit auf 30 Minuten begrenzt."
+      ]
+    },
+    {
+      "version": "1.39.1",
+      "date": "2026-10-19",
+      "changes": [
+        "Tagesverlauf im sichtbaren Dashboard von fünf auf 30 Sekunden Abrufintervall umgestellt.",
+        "Status- und Tagesabrufe bei unsichtbarer Seite pausiert und bei Rückkehr sofort wieder aufgenommen.",
+        "Laufende Tagesanfragen beim Ausblenden abgebrochen, ohne den letzten gültigen Diagrammstand zu verwerfen.",
+        "Doppelte Statusabrufe und überlappende Verlaufstimer verhindert; Messintervalle auf dem Pi unverändert gelassen."
+      ]
+    },
+    {
+      "version": "1.39.0",
+      "date": "2026-10-19",
+      "changes": [
+        "Finanz-Popup um eine zweite 7-Tage-Ansicht für Nutzen der Eigenversorgung und verbleibende Energiekosten erweitert.",
+        "Tageswerte als grüne und orange Balken mit Kalenderwochen-Navigation, Tagesdetails und Kennzeichnung unvollständiger Daten dargestellt.",
+        "Wochenwerte für Nutzen, Restkosten, rechnerischen Vergleich und Eigenversorgungsanteil ergänzt.",
+        "Finanzcache versioniert, Erläuterungen präzisiert und vorhandene Strompreis-Ansicht unverändert beibehalten."
+      ]
+    },
+    {
+      "version": "1.38.0",
+      "date": "2026-10-11",
+      "changes": [
+        "Temperaturverlauf um Sonnenaufgang, Sonnenuntergang und Tageslänge für das ausgewählte Datum ergänzt.",
+        "Sonnenzeiten lokal aus Datum und lokalen Koordinaten berechnet; kein zusätzlicher API-Dienst und keine Datenbankmigration.",
+        "Tageslicht im Temperaturdiagramm dezent hinterlegt und Beginn sowie Ende mit beschrifteten Linien markiert.",
+        "Berechnung und Anzeige für Winter, Sommer und leere Temperaturtage getestet."
+      ]
+    },
+    {
+      "version": "1.37.0",
+      "date": "2026-10-11",
+      "changes": [
+        "Dunkles Kartenlayout als Hauptdashboard unter / aktiviert.",
+        "Vorheriges helles Dashboard als Rückfallmöglichkeit nach /design_alt verschoben.",
+        "Projektdokumentation vollständig an das dunkle Erscheinungsbild angepasst.",
+        "Kompatibilitätsadresse /design-preview und sämtliche Geräte-, Dialog- und Diagrammfunktionen beibehalten."
+      ]
+    },
+    {
+      "version": "1.36.1",
+      "date": "2026-10-11",
+      "changes": [
+        "Leistungsverlauf, Energie- und Kostenbilanz, Akku-Bewirtschaftung, Entscheidungsprotokoll und Systemstatus an das dunkle Kartenraster angepasst.",
+        "Farbcodierung für Netz, PV, Akku, Tibber und Meteo auf Live-Karten und Prognosebereiche erweitert.",
+        "Einheitliche Tagesnavigation für PV-Prognose und Tibber-Preise in der Live-Vorschau ergänzt.",
+        "Systemstatus ans Seitenende verschoben und dort standardmäßig geöffnet; bestehende Hauptansicht bleibt unverändert."
+      ]
+    },
+    {
+      "version": "1.36.0",
+      "date": "2026-10-11",
+      "changes": [
+        "Separate dunkle Live-Designvorschau unter /design-preview ergänzt; das bestehende Dashboard bleibt unverändert.",
+        "Erster Gestaltungsschritt für Kopfbereich, aktuelle Werte, Akku-Steuerung sowie PV- und Tibber-Prognose umgesetzt.",
+        "Alle vorhandenen IDs, Datenabrufe, Dialoge und Steuerfunktionen auch in der Vorschau erhalten.",
+        "Eigenes Update-Skript ergänzt, das ausschließlich den Webdienst neu startet."
+      ]
+    },
+    {
+      "version": "1.35.1",
+      "date": "2026-10-11",
+      "changes": [
+        "Neuen Auftragszustand eingeplant ergänzt; Eigenverbrauch bleibt bis zur gespeicherten Startzeit aktiv.",
+        "Erst ab Ladebeginn auf manuellen Betrieb wechseln und den Modus zurücklesen.",
+        "Bei bereits erreichtem Ziel-SOC oder verstrichenem Fenster keinen manuellen Betrieb mehr starten.",
+        "Neustart, Abbruch, Fremdänderungsprüfung und Dashboarddarstellung an den eingeplanten Zustand angepasst."
+      ]
+    },
+    {
+      "version": "1.35.0",
+      "date": "2026-10-11",
+      "changes": [
+        "Netzladebedarf auf dynamische Nachtreserve begrenzt und um nutzbare Rest-PV nach Hausgrundlast und Prognosepuffer reduziert.",
+        "Nur Viertelstunden unter einer aus späteren Preisen, Wirkungsgrad, Verschleiß und Vorteilspuffer berechneten Wirtschaftsgrenze zugelassen.",
+        "Dashboard um Wirtschaftsgrenze, Rest-PV und Begründung des Fensterendes ergänzt.",
+        "Tests für ausreichende Rest-PV und unwirtschaftliche Preise ergänzt."
+      ]
+    },
+    {
+      "version": "1.34.2",
+      "date": "2026-10-11",
+      "changes": [
+        "Deaktivierten Zeitplan 6 auch mit stehen gebliebenen Zeit- und Leistungswerten zur Wiederverwendung zulassen.",
+        "Aktiven Zeitplan 6 und fehlenden Eigenverbrauch weiterhin vor jedem Start blockieren.",
+        "Regressionstest mit den am Gerät beobachteten deaktivierten Restwerten ergänzt."
+      ]
+    },
+    {
+      "version": "1.34.1",
+      "date": "2026-10-11",
+      "changes": [
+        "Aktiven Zeitplan 6 alle 30 Sekunden mit dem bestätigten Netzladeauftrag vergleichen.",
+        "Bei externer Änderung den Softwareauftrag ohne weitere Registerschreibvorgänge beenden und auf die manuelle Prüfung in der App hinweisen.",
+        "Regressionstest stellt sicher, dass ein fremd geänderter Zeitplan weder gelöscht noch überschrieben wird."
+      ]
+    },
+    {
+      "version": "1.34.0",
+      "date": "2026-10-11",
+      "changes": [
+        "Netzladevorschlag, Status und Bedienung unmittelbar unter dem Marstek-Akku platziert.",
+        "Zustände für Vorschlag, Vorbereitung, aktive Ladung, Abbruch, Abschluss und Fehler getrennt dargestellt.",
+        "Mehrfachbestätigung während eines laufenden Auftrags in der Oberfläche verhindert; Kostenmodell bleibt reine Beobachtung."
+      ]
+    },
+    {
+      "version": "1.33.1",
+      "date": "2026-10-11",
+      "changes": [
+        "Fehlenden lokalen Modbus-Import in der Zeitplan-Abfrage ergänzt; der Akku-Worker bleibt bei Netzladeaufträgen aktiv.",
+        "Regressionstest für das Lesen des reservierten Zeitplans 6 ergänzt."
+      ]
+    },
+    {
+      "version": "1.33.0",
+      "date": "2026-10-11",
+      "changes": [
+        "Ausdrücklich bestätigte Netzladung über den reservierten Marstek-Zeitplan 6 ergänzt.",
+        "Vor jedem Start werden Eigenverbrauch, RS485-Freigabe, leerer Zeitplan 6 und Überschneidungen mit App-Zeitplänen geprüft; alle Schreibwerte werden zurückgelesen.",
+        "Ziel-SOC, Endzeit und Abbruch führen zurück zu Eigenverbrauch und leeren Zeitplan 6; alte Testbestätigungen werden nicht ausgeführt.",
+        "Abbruchbutton sowie Wiederaufnahme nach Prozess- oder Verbindungsunterbrechung ergänzt."
+      ]
+    },
+    {
+      "version": "1.32.2",
+      "date": "2026-10-11",
+      "changes": [
+        "Gespeicherten Netzladeauftrag neben dem weiterhin aktuellen Vorschlag sichtbar gemacht.",
+        "Voreinstellung 500 W als vorsichtige Leistung für den ersten beaufsichtigten Test dokumentiert."
+      ]
+    },
+    {
+      "version": "1.32.1",
+      "date": "2026-10-11",
+      "changes": [
+        "Netzladevorschlag vom End-SOC des Beobachtungsplans entkoppelt.",
+        "Bei SOC unter der Schwelle wird das günstigste zusammenhängende Tibber-Fenster des restlichen Tages gesucht.",
+        "Erkanntes Autoladen verhindert den Vorschlag auf ausdrücklichen Wunsch nicht."
+      ]
+    },
+    {
+      "version": "1.32.0",
+      "date": "2026-10-11",
+      "changes": [
+        "Netzladevorschlag aus dem aktuellen Kostenplan bei einstellbarer SOC-Schwelle ergänzt.",
+        "Bestätigungsbutton und alle Vorschlagsparameter unter Einstellungen ergänzt.",
+        "Bestätigte Aufträge werden dauerhaft gespeichert; Modbus-Schreiben bleibt bis zum beaufsichtigten 500-W-Test ausdrücklich gesperrt."
+      ]
+    },
+    {
+      "version": "1.31.0",
+      "date": "2026-10-11",
+      "changes": [
+        "Schreibfreie Marstek-Diagnose für Steuerregister und sechs Zeitplanblöcke ergänzt.",
+        "Beschriftete Momentaufnahmen werden lesbar im Terminal ausgegeben und als JSON unter data/diagnostics gespeichert.",
+        "Diagnose verwendet ausschließlich Modbus-Funktion 03; Steuerlogik und laufender Sammler bleiben unverändert."
+      ]
+    },
+    {
+      "version": "1.30.1",
+      "date": "2026-10-09",
+      "changes": [
+        "Projektstruktur um Anzahl produktiver Dateien und physischer Codezeilen des aktuellen und unmittelbar vorherigen Versionsstands ergänzt.",
+        "Zählregel dokumentiert; Tests, Dokumentation, Konfiguration, Laufzeitdaten, Sicherungen und virtuelle Umgebung sind nicht Teil der Codezeilenzahl.",
+        "Version 1.30.1 ändert nur Dokumentation und besitzt daher denselben Programmcodeumfang wie 1.30.0."
+      ]
+    },
+    {
+      "version": "1.30.0",
+      "date": "2026-10-09",
+      "changes": [
+        "Effektiven Haushaltsstrompreis auf sieben Tage je ISO-Kalenderwoche von Montag bis Sonntag umgestellt.",
+        "Kalenderwoche und Datumsbereich im Dialog ergänzt; vorherige, aktuelle und folgende Woche direkt wählbar.",
+        "Zukünftige und unvollständige Tage bleiben als Lücke sichtbar; der dauerhafte Tagescache wird beim Blättern weiterverwendet."
+      ]
+    },
+    {
+      "version": "1.29.0",
+      "date": "2026-10-09",
+      "changes": [
+        "Vollständige vergangene Tage des effektiven Haushaltsstrompreises dauerhaft in SQLite zwischenspeichern, statt sie nach einer Stunde erneut aus Rohdaten zu berechnen.",
+        "Cache bei einer neueren SolarEdge-Tagesmeldung oder geänderter Einspeisevergütung automatisch neu berechnen.",
+        "Browser-Wartezeit für die einmalige Erstberechnung von 15 auf 60 Sekunden erhöht; danach bleiben Neustarts des Webservers schnell."
+      ]
+    },
+    {
+      "version": "1.28.2",
+      "date": "2026-10-07",
+      "changes": [
+        "SSH-Kompression für die inzwischen rund 86 MB große Mac-Sicherung aktiviert, damit die WLAN-Verbindung deutlich kürzer stabil bleiben muss.",
+        "Übertragung für große Datenströme priorisiert; SQLite-Prüfung, Wachhaltefunktion und einmaliger Neuversuch bleiben erhalten."
+      ]
+    },
+    {
+      "version": "1.28.1",
+      "date": "2026-10-05",
+      "changes": [
+        "Mac-spezifischen Sicherungsrunner-Test auf dem Pi überspringen, da der Runner ausschließlich unter Library/Application Support auf dem Mac installiert wird.",
+        "Updatepaket kann dadurch die vollständigen Pi-Tests abschließen, bevor Webdienst und Mac-Sicherung aktualisiert werden."
+      ]
+    },
+    {
+      "version": "1.28.0",
+      "date": "2026-10-05",
+      "changes": [
+        "Leistungsverlauf mit relativer Navigation: Tag zurück und Tag vor beziehen sich auf das aktuell gewählte Datum; Heute springt direkt auf den laufenden Tag.",
+        "Mac-Sicherungsstatus zeigt bei einem Fehler den Zeitpunkt des fehlgeschlagenen Versuchs statt des vorherigen Erfolgs; die bestehende erfolgreiche Kopie bleibt ausdrücklich genannt.",
+        "Mac während der Sicherungsübertragung wach halten und einen abgebrochenen SSH-Transfer einmal neu versuchen."
+      ]
+    },
+    {
+      "version": "1.27.1",
+      "date": "2026-10-04",
+      "changes": [
+        "Preisachse des Zehn-Tage-Diagramms auf feste Abstände von 5 ct/kWh umgestellt.",
+        "Mindestens −5, 0 und +5 ct/kWh werden immer gezeigt; größere Werte erweitern die Skala auf Vielfache von fünf.",
+        "Nulllinie dunkler und stärker als die übrigen Rasterlinien dargestellt."
+      ]
+    },
+    {
+      "version": "1.27.0",
+      "date": "2026-10-04",
+      "changes": [
+        "Popup mit Balkendiagramm des effektiven Haushaltsstrompreises für die letzten zehn Tage am Nutzen-Ring ergänzt.",
+        "Wochentag und Datum, positiver oder negativer Preis, heutiger Teilwert und unvollständige Tage visuell unterschieden.",
+        "Tooltip zeigt Netzbezugskosten, Einspeisevergütung, verbleibende Kosten und Hausverbrauch; Formel und nicht enthaltene Kosten werden im Dialog erklärt.",
+        "Lokalen Zehn-Tage-Endpunkt ohne Cloud-Abfragen ergänzt; abgeschlossene vollständige Tage werden höchstens eine Stunde zwischengespeichert."
+      ]
+    },
+    {
+      "version": "1.26.0",
+      "date": "2026-10-02",
+      "changes": [
+        "NDR 2 Schleswig-Holstein als zweiten Radiobutton im Kopfbereich ergänzt.",
+        "Gemeinsamen Audioplayer so erweitert, dass beim Senderwechsel der laufende Stream vollständig beendet wird und höchstens ein Sender spielt.",
+        "Radio-Test, Anleitung und Pi-Updatepaket aktualisiert."
+      ]
+    },
+    {
+      "version": "1.25.0",
+      "date": "2026-10-02",
+      "changes": [
+        "Tatsächlichen gewichteten Tibber-Bezugspreis in ct/kWh unter dem Kostenring ergänzt.",
+        "Effektiven Haushaltsstrompreis aus Netzbezugskosten abzüglich Einspeisevergütung je Hausverbrauch berechnet; negative Tageswerte bleiben sichtbar.",
+        "Erklärungssatz um beide Preise erweitert; Nullmengen und unvollständige Daten werden nicht geschätzt."
+      ]
+    },
+    {
+      "version": "1.24.1",
+      "date": "2026-10-02",
+      "changes": [
+        "Erklärungssatz unter den Geldringen ergänzt: Netzstromkosten, rechnerische Ersparnis und Einspeisevergütung werden getrennt genannt.",
+        "Historische Tage erhalten das ausgewählte Datum; unvollständige Daten führen zu einer eindeutigen Hinweismeldung ohne Teilbeträge."
+      ]
+    },
+    {
+      "version": "1.24.0",
+      "date": "2026-10-02",
+      "changes": [
+        "Zwei Geldringe unter den Energieanteilen: tatsächliche Netzbezugskosten sowie Nutzen aus PV-Eigenverbrauch, Einspeisevergütung und Akku-Abgabe.",
+        "Netzbezug abschnittsweise mit gespeicherten Tibber-Viertelstundenpreisen bewertet; mindestens 95 Prozent Preisabdeckung erforderlich.",
+        "PV-Nutzen und Akku-Abgabe transparent als Näherung beziehungsweise Bruttowert gekennzeichnet; fehlende Daten bleiben sichtbar.",
+        "Technische Dokumentation, Tests und Pi-Updatepaket erweitert."
+      ]
+    },
+    {
+      "version": "1.23.1",
+      "date": "2026-09-27",
+      "changes": [
+        "Updatepaket vervollständigt: marstek_actions.py wird gemeinsam mit marstek_control.py übertragen, damit die Signatur der SOC-Sicherheitslogik auf dem Pi konsistent bleibt.",
+        "Der vollständige Testlauf bleibt vor dem Neustart der Dienste; bei einem Fehler läuft der zuvor aktive Softwarestand unverändert weiter."
+      ]
+    },
+    {
+      "version": "1.23.0",
+      "date": "2026-09-27",
+      "changes": [
+        "Durchgehende Morgenfreigabe 05:00–10:00 Uhr bis 800 W ohne Auslöselast, Zeitlimit oder Energiebudget; harte einstellbare SOC-Schutzgrenze stoppt die Entladung.",
+        "Nachtreserve aus 1,6 kWh Bedarf, Verlustaufschlag, Akkukapazität und Schutz-SOC; verbleibende PV-Prognose berücksichtigt fehlende Energie und Sicherheitsreserve. Nachts ergibt das standardmäßig mindestens 250 W Freigabe bis zur Schutzgrenze.",
+        "Autolade- und Dauerlastschutz bleiben vorrangig und dürfen neue Schutzabsenkungen sofort ausführen; spätere Erhöhungen beachten weiterhin den Schreibabstand.",
+        "SOC-Schwellen, Stufenleistungen, Zeiten, Nachtbedarf, Verlustaufschlag und Prognosepuffer unter Einstellungen justierbar; Anzeige und technische Dokumentation aktualisiert."
+      ]
+    },
+    {
+      "version": "1.22.0",
+      "date": "2026-09-26",
+      "changes": [
+        "Morgenkomfort für zwei bis drei Wasserkocherläufe: erste Hauslast über 400 W startet zwischen 05:00 und 10:00 Uhr einmalig eine Freigabe bis 800 W.",
+        "SOC-abhängiges Energiebudget von 0,10 bis 0,25 kWh, höchstens 60 Minuten und absolute Abschaltung bei 12 % SOC; Autolade- und Dauerlastschutz bleiben vorrangig.",
+        "Tibber-Wirtschaftlichkeitsgrenze und verbleibende PV-Prognose bestimmen volles oder vorsichtiges Budget; fehlende Cloud-Daten führen zur vorsichtigen Variante.",
+        "Morgenstatus, Verbrauch und Entscheidungsgrund im Dashboard und Entscheidungsprotokoll; Zeitfenster, Schwellen und Freigabe sind einstellbar."
+      ]
+    },
+    {
+      "version": "1.21.0",
+      "date": "2026-09-25",
+      "changes": [
+        "SOC-abhängige Sicherheitsgrenze: über 60 % maximal 800 W, 41–60 % maximal 300 W, bis 40 % maximal 100 W; bis 20 % vorläufig ebenfalls 100 W, bis 0 W am Gerät geprüft ist.",
+        "Drei Prozentpunkte Hysterese bei steigenden Ladeständen; Sicherheitsabsenkungen sofort, Erhöhungen weiterhin frühestens nach dem eingestellten Marstek-Mindestabstand.",
+        "Dashboard und Entscheidungsprotokoll zeigen SOC-Sicherheitsstufe und wirksames Ziel; bei veraltetem SOC bleibt die letzte Grenze erhalten und es erfolgt keine Erhöhung."
+      ]
+    },
+    {
+      "version": "1.20.0",
+      "date": "2026-09-24",
+      "changes": [
+        "Schieberegler rechts neben dem Akku-Ladestand für die maximale Entladeleistung bei Autoladen oder Dauerlastschutz: 0–800 W in 50-W-Schritten.",
+        "Bewusste Übernahme statt Schreiben während des Ziehens; Regler und Einstellungsdialog verwenden denselben gespeicherten Parameter.",
+        "Aktuelle Geräte-Entladegrenze bleibt getrennt sichtbar; Änderungen erscheinen im Einstellungs- und Entscheidungsprotokoll."
+      ]
+    },
+    {
+      "version": "1.19.0",
+      "date": "2026-09-20",
+      "changes": [
+        "Marstek-Ladestand als kompakter Kreisring direkt in der Akku-Karte; Prozentwert bleibt in der Mitte sichtbar.",
+        "Farbstufen grün, gelb und rot sowie abgeblendete Darstellung bei veralteten Werten; zugängliche Textbeschreibung ergänzt."
+      ]
+    },
+    {
+      "version": "1.18.0",
+      "date": "2026-09-20",
+      "changes": [
+        "Autolade-Erkennung verwendet Netzbezug plus aktuelle Marstek-Abgabe, damit der Akku die Startschwelle nicht selbst verdeckt.",
+        "Zusätzlicher Dauerlastschutz: standardmäßig mindestens 750 W Akku-Abgabe für zehn Minuten, danach Begrenzung auf den vorhandenen einstellbaren Zielwert.",
+        "Dashboard zeigt Erkennungsgrund, aktuelle Netz-/Akku-/Erkennungsleistung und alle aktuellen Schwellen kompakt; Schutzleistung und Schutzdauer sind einstellbar.",
+        "Entscheidungsprotokoll unterscheidet Autolade-Erkennung und Dauerlastschutz."
+      ]
+    },
+    {
+      "version": "1.17.0",
+      "date": "2026-09-19",
+      "changes": [
+        "Tibber-Diagramm mit dynamischer Wirtschaftlichkeitsgrenze für PV-geladenen Akkustrom.",
+        "Zweite Modellgrenze für Netzladung zum aktuell geltenden Tibber-Preis; automatische Neuberechnung aus Wirkungsgrad, Verschleiß und Vorteilspuffer.",
+        "Tooltip und Erläuterung kennzeichnen beide Grenzen als Modellwerte ohne automatische Steuerung oder Herkunftsnachweis."
+      ]
+    },
+    {
+      "version": "1.16.2",
+      "date": "2026-09-19",
+      "changes": [
+        "Summen der Energiequellen und Energieziele in den Ringmitten mit einer Nachkommastelle in kWh.",
+        "Zeitstempel des Bilanzzeitraums bei den Energieanteilen; unvollständige Daten bleiben gekennzeichnet."
+      ]
+    },
+    {
+      "version": "1.16.1",
+      "date": "2026-09-18",
+      "changes": [
+        "Zeitachse des PV-/Akku-Diagramms unter Einstellungen justierbar: Vorgabe 05:00–23:00 Uhr statt automatischer Bereichswahl.",
+        "Zeitbereich gilt sofort nach Speichern; Tageserträge, gespeicherte Werte und Abrufzeiten bleiben unverändert."
+      ]
+    },
+    {
+      "version": "1.16.0",
+      "date": "2026-09-18",
+      "changes": [
+        "Klick auf Außen · Anlagenstandort öffnet Temperatur-Tagesverlauf mit Heute, Gestern und Datumsfeld.",
+        "Gespeicherte Wetterwerte nach Modellzeit, Min/Max, Tooltip und sichtbare Datenlücken; keine zusätzlichen Wetterabrufe."
+      ]
+    },
+    {
+      "version": "1.15.1",
+      "date": "2026-09-18",
+      "changes": [
+        "Projektdokumentation um Ordnerstruktur, Datenwege, Modulzuständigkeiten und Übersicht der Pi-Hintergrunddienste erweitert."
+      ]
+    },
+    {
+      "version": "1.15.0",
+      "date": "2026-09-18",
+      "changes": [
+        "Kosten-Beobachtungsmodus unten ergänzt: Viertelstundenplan mit Tibber, PV-Prognose und Akku-Ladestand, ausschließlich Simulation.",
+        "Justierbare Planungsparameter, separates 15-Minuten-Timerverfahren und Speicherung der Pläne in SQLite."
+      ]
+    },
+    {
+      "version": "1.14.0",
+      "date": "2026-09-18",
+      "changes": [
+        "Betriebsart und zurückgelesene Entladegrenze direkt in der Akku-Karte anzeigen, einschließlich veralteter Werte.",
+        "Entscheidungsprotokoll unter Systemstatus mit den letzten 50 Einträgen: Ladeerkennung, Anforderungen, Bestätigungen und Fehler."
+      ]
+    },
+    {
+      "version": "1.13.0",
+      "date": "2026-09-18",
+      "changes": [
+        "Dezenter Eigenverbrauch-Button direkt neben dem Akku-Ladestand.",
+        "Persistenter Auftrag an den Pi, Mindestabstand, Rücklesebestätigung und vorgeschaltete Autolade-Entladegrenze. Keine automatische Umschaltung bei 0 W."
+      ]
+    },
+    {
+      "version": "1.12.3",
+      "date": "2026-09-18",
+      "changes": [
+        "Manuelle/externe Marstek-Vorgaben als neutraler Betriebszustand statt Begrenzungsfehler anzeigen. Die Automatik bleibt während der Vorgabe pausiert; echte Kommunikations- und Schreibfehler bleiben sichtbar."
+      ]
+    },
+    {
+      "version": "1.12.2",
+      "date": "2026-09-18",
+      "changes": [
+        "Marstek-Systemstatus aus tatsächlicher SQLite-Messung einschließlich Aktualität, Abruffehlern und letzter erfolgreicher Messung.",
+        "Lautstärkeregler beim NDR-Info-Player entfernt; Start/Stop bleibt erhalten."
+      ]
+    },
+    {
+      "version": "1.12.1",
+      "date": "2026-09-18",
+      "changes": [
+        "Veralteten Akku-Platzhalter unter den Energieanteilen durch erfasste Lade-/Entladeenergie und ersten/letzten Ladestand im Bilanzzeitraum ersetzt."
+      ]
+    },
+    {
+      "version": "1.12.0",
+      "date": "2026-09-18",
+      "changes": [
+        "Energieanteile als Quellen und Ziele inklusive Akku-Ladung und -Abgabe; Bilanzprüfung und Kennzeichnung unvollständiger Tage.",
+        "Akku-Ladestand als violette Kurve im PV-Tagesdiagramm, rechte Achse 0–100 %, mit Messlücken und Tooltip."
+      ]
+    },
+    {
+      "version": "1.11.0",
+      "date": "2026-09-18",
+      "changes": [
+        "Bei bestätigtem Autoladen Entladegrenze auf konfigurierbare 200 W senken; nach Ladeende vorherige Grenze wiederherstellen.",
+        "Mindestabstand zwischen Schreibversuchen bleibt über Neustarts erhalten; Zurücklesen, Befehlsjournal und Pause bei Fremdänderungen."
+      ]
+    },
+    {
+      "version": "1.10.0",
+      "date": "2026-09-18",
+      "changes": [
+        "Marstek Venus E V2: lokale Anzeige von Ladestand und Lade-/Entladeleistung.",
+        "Separater Sammler mit 30-Sekunden-Intervall, SQLite-Speicherung und Erkennung veralteter Werte; ausschließlich Modbus-Leseabfragen."
+      ]
+    },
+    {
+      "version": "1.9.0",
+      "date": "2026-09-18",
+      "changes": [
+        "Außentemperatur Anlagenstandort rechts neben der aktuellen Netzleistung: Open-Meteo-Modellwert, Abruf alle 15 Minuten, Speicherung und Kennzeichnung veralteter Werte.",
+        "NDR-Info-Player links neben Lüfter Bad, Start/Stop und Lautstärke. Audio läuft erst nach Klick auf dem Browsergerät."
+      ]
+    },
+    {
+      "version": "1.8.5",
+      "date": "2026-09-18",
+      "changes": [
+        "Dokumentation anhand des aktuellen Codes überarbeitet: Anlagenübersicht, neun Parameter, Module, Datenbank, Betrieb und Wiederherstellung.",
+        "Veraltete Testmonitor-Schwellen und Sicherungspfade korrigiert; ungeprüfte Marstek-Verdrahtung und geplante Funktionen klar gekennzeichnet.",
+        "Wiederherstellung berücksichtigt alle Schreibdienste und das Verwerfen alter Lüfteraufträge. Keine Änderung der Erfassungs- oder Steuerungslogik."
+      ]
+    },
+    {
+      "version": "1.8.4",
+      "date": "2026-09-16",
+      "changes": [
+        "JavaScript-Fehler beim Leeren des Tibber-Diagramms behoben: Datumswechsel fragt sofort den gewählten Tag ab, statt auf die automatische Aktualisierung zu warten.",
+        "Leeres Diagramm beim Start und nach Abruffehlern wird ohne Zugriff auf fehlende Daten dargestellt."
+      ]
+    },
+    {
+      "version": "1.8.3",
+      "date": "2026-09-16",
+      "changes": [
+        "Tagesbilanz verarbeitet nur die benötigte Gesamtleistung; abgeschlossene Tagesabfragen werden für 60 Sekunden zwischengespeichert.",
+        "Vergangene Tagesdiagramme werden nicht mehr alle fünf Sekunden abgefragt. Ladehinweis und Abbruch überholter Browseranfragen ergänzt; aktuelle Messwerte bleiben unabhängig erreichbar."
+      ]
+    },
+    {
+      "version": "1.8.2",
+      "date": "2026-09-16",
+      "changes": [
+        "Meross-HTTP verwendet gezielt ThreadedResolver (System-DNS), nachdem AsyncResolver auf dem Pi Zeitüberschreitungen zeigte.",
+        "DNS-Fehler werden in der sicheren Diagnose gesondert benannt. Router, Zugangsdaten und globale Python-DNS-Konfiguration bleiben unverändert."
+      ]
+    },
+    {
+      "version": "1.8.1",
+      "date": "2026-09-16",
+      "changes": [
+        "Sichere Meross-Diagnose ergänzt: fehlgeschlagenen Schritt und Fehlerklasse statt allgemeiner Verbindungsfehlermeldung anzeigen.",
+        "Geräteauswahl meldet Anzahl MSS210 und passende Treffer ohne Zugangsdaten oder Geräte-IDs."
+      ]
+    },
+    {
+      "version": "1.8.0",
+      "date": "2026-09-16",
+      "changes": [
+        "Lüfter Bad: Meross-MSS210-Anbindung als separaten Hintergrunddienst ergänzt; Button links neben Messwerte aktuell.",
+        "Einstellbare Laufzeit von 1–120 Minuten (Vorgabe 20), persistente Abschaltfrist und bestätigte Schaltzustände.",
+        "Eindeutige Geräteauswahl und dauerhafte UUID-Bindung; Ausschaltaufträge bleiben bei Verbindungsfehlern bestehen."
+      ]
+    },
+    {
+      "version": "1.7.3",
+      "date": "2026-09-16",
+      "changes": [
+        "Aufklappbaren Systemstatus unter die Energieringe ans Ende des Dashboards verschoben."
+      ]
+    },
+    {
+      "version": "1.7.2",
+      "date": "2026-09-16",
+      "changes": [
+        "SolarEdge-Tagesertrag heute über den Prognosen hervorgehoben.",
+        "Prognose heute und morgen untereinander angeordnet; historische Erträge bleiben am Diagramm."
+      ]
+    },
+    {
+      "version": "1.7.1",
+      "date": "2026-09-16",
+      "changes": [
+        "Mac-Hintergrundsicherung aus dem geschützten Dokumente-Ordner nach Library/Application Support/EnergyPi verlagert.",
+        "Eigenständiger Runner verwendet macOS-Systemprogramme; Installation startet einen echten launchd-Test."
+      ]
+    },
+    {
+      "version": "1.7.0",
+      "date": "2026-09-14",
+      "changes": [
+        "Zwei farbige Energieringe unter dem Leistungsverlauf ergänzt; Speicherflüsse als unbekannte Werte vorbereitet.",
+        "Einstellungen rechts neben Messwerte aktuell verschoben.",
+        "Schätzungen bei fehlendem Ertrag, unzureichender Messabdeckung oder widersprüchlichen Energiesummen unterdrückt."
+      ]
+    },
+    {
+      "version": "1.6.0",
+      "date": "2026-09-14",
+      "changes": [
+        "Hausgrundlast und dreiphasigen Ladestrom einstellbar gemacht; gelbes PV-Band und Beschriftungen verwenden die gespeicherten Werte.",
+        "PV-Schwelle wird im Einstellungsdialog vorgerechnet; vorhandene Einstellungen bleiben erhalten."
+      ]
+    },
+    {
+      "version": "1.5.0",
+      "date": "2026-09-14",
+      "changes": [
+        "Dashboard-Einstellungen für Ladeerkennung, Messlücke, vorbereiteten Marstek-Abstand und Einspeisevergütung ergänzt.",
+        "Neue Erkennungsvorgaben 2.000/1.000 W; Einstellungen und Änderungen dauerhaft in SQLite gespeichert."
+      ]
+    },
+    {
+      "version": "1.4.0",
+      "date": "2026-09-13",
+      "changes": [
+        "Mac-Sicherungsstatus ergänzt: letzte erfolgreiche Rückmeldung, Fehler und Überfälligkeit nach 36 Stunden.",
+        "Separater eingeschränkter SSH-Schlüssel für Sicherungsrückmeldungen; Erfolg erst nach SQLite-Prüfung und Speicherung auf dem Mac."
+      ]
+    },
+    {
+      "version": "1.3.0",
+      "date": "2026-09-13",
+      "changes": [
+        "Geschätzte Tagesbilanz für Netzbezug und Einspeisung mit Datenabdeckung ergänzt.",
+        "Bestätigte Autolade-Erkennung im Leistungsverlauf grün markiert; Messlücken werden ausgespart."
+      ]
+    },
+    {
+      "version": "1.2.0",
+      "date": "2026-09-13",
+      "changes": [
+        "Windy-Button neben der PV-Prognose ergänzt: Wolkenkarte im schließbaren Popup, erst beim Öffnen geladen."
+      ]
+    },
+    {
+      "version": "1.1.0",
+      "date": "2026-09-13",
+      "changes": [
+        "Aufklappbaren Systemstatus für Shelly, Datenerfassung, SolarEdge, PV-Prognose, Tibber und Marstek ergänzt.",
+        "Lokale Speicherinformationen und sichere Fehlermeldungen ohne zusätzliche Cloud-Abfragen ergänzt."
+      ]
+    },
+    {
+      "version": "1.0.0",
+      "date": "2026-09-13",
+      "changes": [
+        "Versionsanzeige neben der Dashboard-Überschrift mit eigener Dokumentationsseite und Versionsverlauf ergänzt.",
+        "Erste explizit dokumentierte Version: vorhandene Shelly-Erfassung, SQLite-Aufbewahrung und Sicherung, SolarEdge-Tagesertrag, PV-Prognose, Tibber-Preise und Markierung günstiger Zeitfenster zusammengefasst.",
+        "Autolade-Erkennung mit Statusanzeige und Speicherung der Zustandswechsel ist enthalten. Frühere Änderungen hatten keine vergebene Versionsnummer."
+      ]
+    }
+  ]
+}

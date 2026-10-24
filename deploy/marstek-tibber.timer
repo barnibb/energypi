@@ -1,0 +1,10 @@
+[Unit]
+Description=Check whether Tibber prices need updating
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+Unit=marstek-tibber.service
+
+[Install]
+WantedBy=timers.target

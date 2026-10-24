@@ -1,0 +1,10 @@
+[Unit]
+Description=PV forecast every two hours during daytime
+
+[Timer]
+OnCalendar=*-*-* 06,08,10,12,14,16,18,20,22:00:00 Europe/Berlin
+Persistent=true
+Unit=marstek-forecast.service
+
+[Install]
+WantedBy=timers.target

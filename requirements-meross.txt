@@ -1,0 +1,2 @@
+# Optional: nur für den separaten Lüfterdienst.
+meross_iot==0.4.10.4

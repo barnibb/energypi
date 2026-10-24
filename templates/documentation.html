@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="de">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Projektdokumentation · EnergyPi - Monitor</title><link rel="stylesheet" href="/static/style.css"><link rel="stylesheet" href="/static/design-live.css"></head>
+<body class="design-live documentation-page"><main class="documentation">
+<header class="documentation-header"><div><p class="eyebrow">ENERGYPI · VERSION {{ info.version }}</p><h1>Projektdokumentation</h1><p class="muted">Stand: {{ info.updated }}</p></div><div class="documentation-actions"><a href="/">Dashboard</a><a href="/design_alt">Altes Design</a></div></header>
+<nav class="docnav" aria-label="Inhalt"><a href="#versionsverlauf">Versionsverlauf</a>{% for section in info.sections %}<a href="#abschnitt-{{ loop.index }}">{{ section.title }}</a>{% endfor %}</nav>
+{% for section in info.sections %}<section class="chartcard" id="abschnitt-{{ loop.index }}"><h2>{{ section.title }}</h2>{% for paragraph in section.paragraphs %}<p>{{ paragraph }}</p>{% endfor %}{% if section.code %}<pre style="overflow-x:auto;padding:16px;background:#f4f6f0;border-radius:10px;font-size:13px;line-height:1.6"><code>{{ section.code }}</code></pre>{% endif %}{% if section.table %}<div style="overflow-x:auto"><table><thead><tr>{% for heading in section.table.headers %}<th scope="col">{{ heading }}</th>{% endfor %}</tr></thead><tbody>{% for row in section.table.rows %}<tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div>{% endif %}</section>{% endfor %}
+<section class="chartcard" id="versionsverlauf"><h2>Versionsverlauf</h2>{% for release in info.releases %}<article><h3>Version {{ release.version }} · {{ release.date }}</h3><ul>{% for change in release.changes %}<li>{{ change }}</li>{% endfor %}</ul></article>{% endfor %}</section>
+<footer><a href="/">Zurück zum Dashboard</a></footer>
+</main></body></html>

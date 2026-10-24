@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Shelly archive and backup
+
+[Timer]
+OnCalendar=*-*-* 03:15:00
+Persistent=true
+RandomizedDelaySec=300
+Unit=marstek-maintenance.service
+
+[Install]
+WantedBy=timers.target

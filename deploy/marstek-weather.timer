@@ -1,0 +1,8 @@
+[Unit]
+Description=EnergyPi weather every 15 minutes
+[Timer]
+OnCalendar=*-*-* *:00,15,30,45:00
+Persistent=true
+Unit=marstek-weather.service
+[Install]
+WantedBy=timers.target

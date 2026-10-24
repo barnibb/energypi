@@ -1,0 +1,18 @@
+{
+  "id": "/",
+  "name": "EnergyPi – Monitor",
+  "short_name": "EnergyPi",
+  "description": "Lokaler Monitor für Netz, Photovoltaik, Speicher und Strompreise",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "background_color": "#090d12",
+  "theme_color": "#090d12",
+  "orientation": "any",
+  "icons": [
+    {"src": "/static/icons/energypi-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "/static/icons/energypi-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "/static/icons/energypi-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}

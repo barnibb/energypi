@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>EnergyPi · Energiefluss-Vorschau</title><meta name="theme-color" content="#090d12"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="EnergyPi"><link rel="manifest" href="/static/manifest.webmanifest"><link rel="apple-touch-icon" sizes="180x180" href="/static/icons/energypi-180.png"><link rel="icon" type="image/png" sizes="192x192" href="/static/icons/energypi-192.png">
+<link rel="stylesheet" href="/static/energy-flow-preview.css">
+<script src="/static/energy-flow-preview.js" defer></script>
+</head>
+<body>
+<header class="topbar"><div><p class="eyebrow">ENERGYPI · VORSCHAU</p><h1>Live-Energiefluss</h1></div><div class="top-actions"><span id="flow-status" role="status">Messwerte werden geladen …</span><a href="/">Zur Hauptansicht</a></div></header>
+<main>
+<p class="preview-note">Getrennte Vorschauseite · die laufende Hauptansicht bleibt unverändert</p>
+<section class="flow-card" aria-labelledby="flow-title">
+<div class="section-head"><div><p class="eyebrow">HAUS · ANLAGENSTANDORT</p><h2 id="flow-title">Energie im Überblick</h2></div><p id="flow-time">Noch keine Messung</p></div>
+<div class="diagram-wrap">
+<svg id="energy-flow" viewBox="0 0 1200 760" role="img" aria-labelledby="diagram-title diagram-desc">
+<title id="diagram-title">Aktuelle Energieflüsse des Hauses</title>
+<desc id="diagram-desc">Stromnetz, Photovoltaikanlage, Haus, Marstek-Akku und blaues Model Y. Bewegte Linien zeigen Richtung und relative Stärke des Stromflusses.</desc>
+<defs>
+ <marker id="arrow-blue" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0 0 9 4.5 0 9z" fill="#6bbbea"/></marker>
+ <marker id="arrow-green" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0 0 9 4.5 0 9z" fill="#72c579"/></marker>
+ <marker id="arrow-purple" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0 0 9 4.5 0 9z" fill="#ad83d2"/></marker>
+ <marker id="arrow-orange" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0 0 9 4.5 0 9z" fill="#efad3e"/></marker>
+</defs>
+
+<circle class="central-hub" cx="600" cy="340" r="20"/><circle class="central-hub-core" cx="600" cy="340" r="7"/>
+
+<path id="flow-pv" class="flow-path pv" d="M600 194 L600 318"/>
+<path id="flow-house" class="flow-path house-flow" d="M578 340 L317 340"/>
+<path id="flow-grid" class="flow-path grid" d="M928 340 L622 340"/>
+<path id="flow-battery" class="flow-path battery" d="M600 362 L600 535"/>
+<path id="flow-car" class="flow-path car" d="M615 357 C700 430 770 515 865 552"/>
+
+<g class="asset pv-asset" transform="translate(510 50)">
+ <circle class="sun" cx="90" cy="22" r="19"/><path class="sun-rays" d="M90-8v-17M90 52v17M60 22H43M137 22h-17M69 1 57-11M111 43l12 12M111 1l12-12M69 43 57 55"/>
+ <path class="panel-icon" d="M28 63h124l18 75H10zM41 63l-9 75M67 63l-5 75M93 63l4 75M119 63l13 75M20 88h141M15 113h151M90 138v34M65 172h50"/>
+</g>
+<g class="metric-box pv-box" transform="translate(55 45)"><rect width="265" height="122" rx="16"/><text x="132" y="27" class="box-title" text-anchor="middle">PV</text><path d="M0 39h265"/><text x="17" y="69" class="box-label pv-text">Leistung:</text><text id="pv-power" x="244" y="69" class="box-value" text-anchor="end">—</text><text x="17" y="99" class="box-sub">SolarEdge SE7K</text></g>
+
+<g class="asset house-asset" transform="translate(105 252)"><path class="icon-stroke" d="M5 83 91 12l88 71M21 71v111h140V71M76 182v-63h49v63M39 100h34v35H39zM56 100v35M39 117h34"/><circle class="icon-fill" cx="91" cy="67" r="10"/></g>
+<g class="metric-box house-box" transform="translate(50 470)"><rect width="280" height="126" rx="16"/><text x="140" y="28" class="box-title" text-anchor="middle">HAUS</text><path d="M0 40h280"/><text x="17" y="72" class="box-label house-text">Verbrauch:</text><text id="house-power" x="258" y="72" class="box-value" text-anchor="end">—</text><text x="17" y="102" class="box-sub">Berechneter Momentanwert</text></g>
+
+<g class="asset grid-asset" transform="translate(940 218)"><path class="icon-stroke" d="M82 0 10 182h144zM82 0v182M52 75h60M35 118h94M19 159h126M30 48l52 27 52-27M18 182h36M110 182h36"/></g>
+<g class="metric-box grid-box" transform="translate(900 45)"><rect width="265" height="137" rx="16"/><text x="132" y="28" class="box-title" text-anchor="middle">NETZ</text><path d="M0 40h265"/><text x="17" y="72" class="box-label grid-text">Leistung:</text><text id="grid-power" x="244" y="72" class="box-value" text-anchor="end">—</text><text id="grid-mode" x="17" y="105" class="box-sub">Status wird geladen</text></g>
+
+<g class="asset battery-asset" transform="translate(535 548)"><rect class="battery-outline" width="130" height="155" rx="8"/><rect class="battery-top" x="43" y="-16" width="44" height="16" rx="4"/><rect id="battery-fill" x="12" y="70" width="106" height="73" rx="4"/><text id="battery-soc" x="65" y="92" text-anchor="middle" class="battery-percent">—</text></g>
+<g class="metric-box battery-box" transform="translate(360 620)"><rect width="270" height="120" rx="16"/><text x="135" y="28" class="box-title" text-anchor="middle">SPEICHER</text><path d="M0 40h270"/><text x="17" y="71" class="box-label battery-text">Leistung:</text><text id="battery-power" x="250" y="71" class="box-value" text-anchor="end">—</text><text id="battery-mode" x="17" y="101" class="box-sub">Status wird geladen</text></g>
+
+<g class="asset car-asset" transform="translate(865 510)"><path class="car-body" d="M8 52c9-23 37-36 74-38l49-2c29 0 53 12 74 33l36 6c11 2 16 10 16 21v13H0V67c0-8 3-12 8-15z"/><path class="car-glass" d="M74 20h57c21 0 39 8 57 26H48c8-13 16-21 26-26z"/><path class="car-detail" d="M12 55h230M133 15l-3 32M67 49 56 81M201 47l14 34"/><circle class="wheel" cx="57" cy="84" r="19"/><circle class="wheel" cx="204" cy="84" r="19"/><circle class="hub" cx="57" cy="84" r="7"/><circle class="hub" cx="204" cy="84" r="7"/></g>
+<g class="metric-box car-box" transform="translate(880 630)"><rect width="285" height="110" rx="16"/><text x="142" y="28" class="box-title" text-anchor="middle">BLAUES MODEL Y</text><path d="M0 40h285"/><text id="car-power" x="18" y="72" class="box-value">—</text><text id="car-mode" x="18" y="98" class="box-sub">Autolade-Erkennung</text></g>
+
+<g class="flow-tag" id="tag-pv"><rect x="536" y="235" width="128" height="31" rx="15"/><text id="tag-pv-text" x="600" y="256" text-anchor="middle">PV → Haus</text></g>
+<g class="flow-tag" id="tag-house"><rect x="378" y="299" width="142" height="31" rx="15"/><text id="tag-house-text" x="449" y="320" text-anchor="middle">Verteilung → Haus</text></g>
+<g class="flow-tag" id="tag-grid"><rect x="742" y="299" width="130" height="31" rx="15"/><text id="tag-grid-text" x="807" y="320" text-anchor="middle">Netz → Haus</text></g>
+<g class="flow-tag" id="tag-battery"><rect x="536" y="440" width="128" height="31" rx="15"/><text id="tag-battery-text" x="600" y="461" text-anchor="middle">Akku → Haus</text></g>
+<g class="flow-tag" id="tag-car"><rect x="728" y="444" width="126" height="31" rx="15"/><text id="tag-car-text" x="791" y="465" text-anchor="middle">Haus → Auto</text></g>
+</svg>
+</div>
+<div class="legend"><span><i class="pv-dot"></i>PV und Einspeisung</span><span><i class="grid-dot"></i>Netzbezug</span><span><i class="battery-dot"></i>Akku</span><span><i class="car-dot"></i>Model Y</span><span class="legend-note">Liniengeschwindigkeit entspricht näherungsweise der Leistung.</span></div>
+</section>
+<section class="explanation"><h2>Berechnungsgrundlage</h2><p>Hausverbrauch = PV + Netzbezug + Akkuentladung − Einspeisung − Akkuladung. Wegen unterschiedlicher Messzeitpunkte wird der Hauswert als Näherung angezeigt. Die Autoladeleistung ist ohne Tesla- oder Wallbox-Anbindung ebenfalls eine Schätzung.</p></section>
+</main>
+<footer>EnergyPi {{ version }} · Vorschau ohne Steuerfunktionen</footer>
+</body></html>

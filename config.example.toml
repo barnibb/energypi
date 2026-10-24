@@ -1,0 +1,13 @@
+[shelly]
+host = "SHELLY_IP"
+poll_seconds = 5
+timeout_seconds = 3
+
+[high_load]
+block_above_w = 3000
+release_below_w = 2000
+hold_seconds = 180
+max_gap_seconds = 15
+
+[storage]
+path = "data/measurements.db"

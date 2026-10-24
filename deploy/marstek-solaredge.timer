@@ -1,0 +1,10 @@
+[Unit]
+Description=SolarEdge polling every 15 minutes
+
+[Timer]
+OnCalendar=*-*-* *:00,15,30,45:00
+Persistent=true
+Unit=marstek-solaredge.service
+
+[Install]
+WantedBy=timers.target
