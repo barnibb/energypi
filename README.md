@@ -1,6 +1,6 @@
 # EnergyPi - Monitor
 
-Stand: Version 1.49.2, 24.10.2026. EnergyPi ist eine lokale Python-Anwendung für den Raspberry Pi mit SQLite und Browseroberfläche. Sie erfasst Netzwerte über einen Shelly Pro 3EM, liest und steuert einen Marstek Venus E V2 und ergänzt SolarEdge-, Forecast.Solar-, Tibber- und Wetterdaten. Ein Meross-Zwischenstecker kann den Badlüfter mit einstellbarer Abschaltfrist steuern. Messwerterfassung, Schutzlogik und zeitgesteuerte Dienste laufen unabhängig vom geöffneten Browser.
+Stand: Version 1.49.3, 24.10.2026. EnergyPi ist eine lokale Python-Anwendung für den Raspberry Pi mit SQLite und Browseroberfläche. Sie erfasst Netzwerte über einen Shelly Pro 3EM, liest und steuert einen Marstek Venus E V2 und ergänzt SolarEdge-, Forecast.Solar-, Tibber- und Wetterdaten. Ein Meross-Zwischenstecker kann den Badlüfter mit einstellbarer Abschaltfrist steuern. Messwerterfassung, Schutzlogik und zeitgesteuerte Dienste laufen unabhängig vom geöffneten Browser.
 
 ![EnergyPi-Dashboard mit Netzbezug, PV, Akku, Strompreis, Wetter und Energiebilanz](docs/images/dashboard-overview.png)
 

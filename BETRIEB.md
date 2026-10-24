@@ -48,9 +48,9 @@ Netzausfall/WLAN-Lücke: keine Nullwerte erfinden, laufende Erkennungsfrist wird
 
 ## Updates und Rückkehr
 
-Entwicklung am Mac; Update-Skript dort im Projekt ausführen. Skripte übertragen Dateien per SSH/rsync und benötigen gegebenenfalls Passwort. `deploy-to-pi.sh` ist die Basisinstallation und überträgt auch config.toml; gezielte Updates sind für Einzeländerungen vorgesehen. Daten, secrets.toml und virtuelle Umgebung werden vom vollständigen Deployment ausgeschlossen. Zusatzdienste werden separat eingerichtet.
+Entwicklung am Mac; Update-Skript dort im Projekt ausführen. Skripte übertragen Dateien per SSH/rsync und benötigen gegebenenfalls Passwort. `deploy-to-pi.sh` dient der Basisinstallation und vollständigen Programmaktualisierung. Es schließt `config.toml`, `marstek.toml`, `forecast.toml`, `secrets.toml`, `deploy-local.env`, Daten, Sicherungen und die virtuelle Umgebung ausdrücklich aus. Vor der Übertragung legt es auf dem Pi eine datensparsame Code-Sicherung an und behält die drei neuesten Stände.
 
-Vor größeren Updates geprüfte DB-Sicherung und Kopie des bisherigen Codes einschließlich Konfiguration behalten. Die Rollback-Kopie darf secrets.toml nur geschützt enthalten. Nach Update Version im Browser und Dienststatus prüfen. Bei reinem Webfehler vorherige zusammengehörige Programmdateien zurückspielen und Webdienst neu starten. Bei geänderter Datenbankstruktur nicht blind alten Code mit neuer DB kombinieren: passendes Code/DB-Paar wiederherstellen. Kein automatisches Rollback vorhanden.
+Vor größeren Updates zusätzlich eine geprüfte DB-Sicherung behalten. Der vollständige Installer prüft zunächst die vier lokalen Konfigurationsdateien und führt die Tests auf dem Pi aus. Erst danach aktualisiert er systemd-Definitionen und startet die zuvor laufenden EnergyPi-Dienste gemeinsam neu. Schlägt die Prüfung vorher fehl, bleiben die laufenden Prozesse unangetastet und das Skript nennt den Pfad der Code-Sicherung. Bei geänderter Datenbankstruktur nicht blind alten Code mit neuer DB kombinieren: passendes Code/DB-Paar wiederherstellen.
 
 ## Sicherungsumfang
 

@@ -8,6 +8,12 @@ mit Platzhaltern tragen die Endung `.example.toml` beziehungsweise `.example.env
 Alle Update-Skripte laden ihr Ziel über `deploy-common.sh`; fehlt die lokale Datei,
 brechen sie vor einer Netzwerkverbindung mit einer verständlichen Meldung ab.
 
+Das vollständige Deployment überträgt keine lokale Konfiguration und keine
+Laufzeitdaten. Vor jedem Lauf entsteht auf dem Pi eine Code-Sicherung; drei Stände
+bleiben erhalten. Der Installer übernimmt das konfigurierte Zielverzeichnis in die
+systemd-Definitionen, testet den übertragenen Stand vor dem Neustart und startet
+alle zuvor aktiven EnergyPi-Dienste kontrolliert gemeinsam neu.
+
 Die automatische Mac-Sicherung kopiert `deploy-local.env` mit Rechten 0600 in ihren
 Laufzeitordner. Ihr allgemeiner launchd-Name lautet `local.energypi.mac-backup`.
 Ein optionaler früherer Name kann ausschließlich in der lokalen Umgebungsdatei für

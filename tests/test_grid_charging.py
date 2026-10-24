@@ -4,6 +4,7 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 from database import connect
 from forecast import initialize_forecast
@@ -52,12 +53,13 @@ class GridChargingTests(unittest.TestCase):
 
     def test_manual_api_requires_header_and_returns_preview(self):
         from webapp import create_app
-        now=time.time();self.prices(now)
+        now=1760173200;self.prices(now)
         client=create_app({'database_path':self.path,'shelly':{'poll_seconds':5}}).test_client()
         self.assertEqual(client.post('/api/grid-charge/preview',json=self.spec()).status_code,403)
-        response=client.post('/api/grid-charge/preview',json=self.spec(),headers={'X-EnergyPi':'settings'})
-        self.assertEqual(response.status_code,200);self.assertTrue(response.json['manual'])
-        created=client.post('/api/grid-charge',json=self.spec(),headers={'X-EnergyPi':'settings'})
+        with patch('grid_charging.time.time',return_value=now):
+            response=client.post('/api/grid-charge/preview',json=self.spec(),headers={'X-EnergyPi':'settings'})
+            self.assertEqual(response.status_code,200);self.assertTrue(response.json['manual'])
+            created=client.post('/api/grid-charge',json=self.spec(),headers={'X-EnergyPi':'settings'})
         self.assertEqual(created.status_code,200);self.assertEqual(created.json['request']['status'],'confirmed')
 
     def test_confirmed_request_configures_slot_and_returns_to_self_consumption(self):

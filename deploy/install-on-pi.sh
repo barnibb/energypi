@@ -1,10 +1,21 @@
 #!/bin/bash
 set -euo pipefail
-cd /home/pi/marstek-control
+project_directory="${ENERGYPI_REMOTE_DIR:-/home/pi/marstek-control}"
+if [[ ! "$project_directory" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
+    echo "Ungültiges Projektverzeichnis: $project_directory" >&2
+    exit 1
+fi
+cd "$project_directory"
 if [ "$(id -un)" != pi ]; then
     echo 'Bitte als Benutzer pi ausführen.' >&2
     exit 1
 fi
+for required in config.toml marstek.toml forecast.toml secrets.toml; do
+    if [ ! -f "$required" ]; then
+        echo "Lokale Konfiguration fehlt: $project_directory/$required" >&2
+        exit 1
+    fi
+done
 python3 -c 'import sys,sqlite3,ssl,venv; assert sys.version_info >= (3,11), "Python >= 3.11 erforderlich"'
 # Keine fremde Anwendung auf Port 8080 verdrängen.
 if ss -ltnH 'sport = :8080' | read -r _; then
@@ -21,17 +32,39 @@ python3 -m venv .venv
 .venv/bin/python -m unittest discover -s tests -v
 mkdir -p data
 .venv/bin/python -c 'from settings import load_settings; from database import initialize; initialize(load_settings()["database_path"])'
-# Bestehende gleichnamige Dienstdefinitionen für eine Rückkehr sichern.
+# Bestehende Dienstdefinitionen sichern und alle mitgelieferten Definitionen
+# aktualisieren. Nur bereits laufende Dienste werden anschließend neu gestartet.
 stamp=$(date +%Y%m%d-%H%M%S)
-for service in marstek-collector marstek-web; do
-    if [ -f "/etc/systemd/system/$service.service" ]; then
-        sudo cp -p "/etc/systemd/system/$service.service" "/etc/systemd/system/$service.service.backup-$stamp"
+active_services=()
+for source in deploy/marstek-*.service; do
+    unit="$(basename "$source")"
+    if systemctl is-active --quiet "$unit"; then
+        active_services+=("$unit")
     fi
-    sudo install -m 644 "deploy/$service.service" "/etc/systemd/system/$service.service"
+    if [ -f "/etc/systemd/system/$unit" ]; then
+        sudo cp -p "/etc/systemd/system/$unit" "/etc/systemd/system/$unit.backup-$stamp"
+    fi
+    rendered="$(mktemp)"
+    sed "s|/home/pi/marstek-control|$project_directory|g" "$source" > "$rendered"
+    sudo install -m 644 "$rendered" "/etc/systemd/system/$unit"
+    rm -f "$rendered"
+done
+for source in deploy/marstek-*.timer; do
+    unit="$(basename "$source")"
+    if [ -f "/etc/systemd/system/$unit" ]; then
+        sudo cp -p "/etc/systemd/system/$unit" "/etc/systemd/system/$unit.backup-$stamp"
+    fi
+    sudo install -m 644 "$source" "/etc/systemd/system/$unit"
 done
 sudo systemctl daemon-reload
 sudo systemctl enable marstek-collector marstek-web
-sudo systemctl restart marstek-collector marstek-web
+restart_services=(marstek-collector.service marstek-web.service)
+for unit in "${active_services[@]}"; do
+    if [[ " ${restart_services[*]} " != *" $unit "* ]]; then
+        restart_services+=("$unit")
+    fi
+done
+sudo systemctl restart "${restart_services[@]}"
 # Auf HTTP-Antwort UND eine aktuelle erfolgreiche Messung warten.
 .venv/bin/python - <<'PY'
 import json
@@ -52,6 +85,6 @@ else:
     raise SystemExit('Keine aktuellen Werte. Prüfen: journalctl -u marstek-collector -u marstek-web -n 50 --no-pager')
 PY
 systemctl is-enabled marstek-collector marstek-web
-systemctl is-active marstek-collector marstek-web
+systemctl is-active "${restart_services[@]}"
 host_address="$(hostname -I 2>/dev/null | awk '{print $1}')"
-echo "Fertig: http://${host_address:-RASPBERRY_PI_IP}:8080 — beide Dienste starten beim Booten automatisch."
+echo "Fertig: http://${host_address:-RASPBERRY_PI_IP}:8080 — laufende EnergyPi-Dienste wurden mit dem geprüften Stand neu gestartet."
