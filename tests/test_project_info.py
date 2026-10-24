@@ -8,8 +8,8 @@ class ProjectInfoTests(unittest.TestCase):
         info=json.loads(Path('project_info.json').read_text())
         section=next(section for section in info['sections'] if section['title']=='Projektstruktur: Dateien und Ordner')
         self.assertEqual(section['table']['headers'],['Version','Produktive Dateien','Codezeilen','Hinweis'])
-        self.assertEqual(section['table']['rows'][0][:3],['1.49.3','125','6.196'])
-        self.assertEqual(section['table']['rows'][1][:3],['1.49.2','125','6.142'])
+        self.assertEqual(section['table']['rows'][0][:3],['1.49.4','125','6.198'])
+        self.assertEqual(section['table']['rows'][1][:3],['1.49.3','125','6.196'])
         self.assertIn('ohne Tests',section['paragraphs'][-1])
 
 

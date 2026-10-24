@@ -52,6 +52,11 @@ Entwicklung am Mac; Update-Skript dort im Projekt ausführen. Skripte übertrage
 
 Vor größeren Updates zusätzlich eine geprüfte DB-Sicherung behalten. Der vollständige Installer prüft zunächst die vier lokalen Konfigurationsdateien und führt die Tests auf dem Pi aus. Erst danach aktualisiert er systemd-Definitionen und startet die zuvor laufenden EnergyPi-Dienste gemeinsam neu. Schlägt die Prüfung vorher fehl, bleiben die laufenden Prozesse unangetastet und das Skript nennt den Pfad der Code-Sicherung. Bei geänderter Datenbankstruktur nicht blind alten Code mit neuer DB kombinieren: passendes Code/DB-Paar wiederherstellen.
 
+Ältere `forecast.toml` ohne Anzeigenamen bleiben kompatibel und erscheinen zunächst
+neutral als „Anlagenstandort“. Ein gewünschter lokaler Name kann später mit
+`name = "..."` ergänzt werden. Veröffentlichungstests laufen nur in einer
+Git-Arbeitskopie und werden auf dem Pi übersprungen.
+
 ## Sicherungsumfang
 
 Aktuelle automatische Mac-Sicherungen: `~/Library/Application Support/EnergyPi/backups/`. Dort `automatic.log` und `automatic-error.log`. Runner: benachbart `run-backup.sh`, geplant 04:15 Uhr. Sieben erfolgreiche Datenbankkopien; bei schlafendem Mac nach Aufwachen, sofern angemeldet und Pi erreichbar. Sobald ein Lauf begonnen hat, hält er den Mac bis zum Abschluss wach. SSH komprimiert die Übertragung, die gespeicherte Datei bleibt eine normale SQLite-Datenbank. Ein abgebrochener Transfer wird einmal neu begonnen. Pi-Snapshots: `/home/pi/marstek-control/data/backups/`.

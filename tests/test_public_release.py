@@ -3,7 +3,9 @@ import re
 import unittest
 from pathlib import Path
 
+ROOT = Path(__file__).parents[1]
 
+@unittest.skipUnless((ROOT / '.git').is_dir(), 'Veröffentlichungsprüfung benötigt eine Git-Arbeitskopie')
 class PublicReleaseTests(unittest.TestCase):
     def tracked_files(self):
         result = subprocess.run(

@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from database import connect
 from webapp import create_app
-from forecast import normalize, remaining, collect_forecast, forecast_status, forecast_url, ZONE
+from forecast import normalize, remaining, collect_forecast, forecast_status, forecast_url, plant, ZONE
 from energy import parse_energy, collect_energy
 
 
@@ -29,6 +29,14 @@ class ForecastTests(unittest.TestCase):
         self.assertEqual(remaining(day,self.now),1.5)
         self.assertEqual(remaining(day,self.now-7200),2)
         self.assertEqual(remaining(day,self.now+20000),0)
+
+    def test_existing_configuration_without_name_is_compatible(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            root.joinpath('forecast.toml').write_text('latitude=52\nlongitude=13\nkwp=7\ntilt=43\nazimuth=180\n')
+            with patch('forecast.ROOT',root):
+                self.assertEqual(plant()['name'],'Anlagenstandort')
 
     def test_snapshots_preserved_and_failures_keep_last_forecast(self):
         def fetch(config):return normalize(data())

@@ -1,5 +1,5 @@
 {
-  "version": "1.49.3",
+  "version": "1.49.4",
   "updated": "2026-10-24",
   "sections": [
     {
@@ -29,16 +29,16 @@
         ],
         "rows": [
           [
+            "1.49.4",
+            "125",
+            "6.198",
+            "Aktueller Stand; rückwärtskompatible Standortkonfiguration und Pi-taugliche Testausführung"
+          ],
+          [
             "1.49.3",
             "125",
             "6.196",
             "Aktueller Stand; vollständiges Pi-Deployment schützt lokale Konfiguration und startet aktive Dienste kontrolliert neu"
-          ],
-          [
-            "1.49.2",
-            "125",
-            "6.142",
-            "Aktueller Stand; bereinigte Dashboard-Abbildung in der öffentlichen README"
           ]
         ]
       }
@@ -484,6 +484,15 @@
     }
   ],
   "releases": [
+    {
+      "version": "1.49.4",
+      "date": "2026-10-24",
+      "changes": [
+        "Ältere forecast.toml ohne Anzeigenamen werden neutral als Anlagenstandort weiterverwendet.",
+        "Git-abhängige Veröffentlichungstests werden auf Installationen ohne Git-Arbeitskopie übersprungen, bleiben auf dem Entwicklungsrechner aber aktiv.",
+        "Fehlgeschlagenen ersten vollständigen Pi-Testlauf ohne Dienstneustart ausgewertet und beide Kompatibilitätsursachen behoben."
+      ]
+    },
     {
       "version": "1.49.3",
       "date": "2026-10-24",

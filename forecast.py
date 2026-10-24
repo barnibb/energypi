@@ -31,6 +31,8 @@ def plant():
         v=config.get(key)
         if isinstance(v,bool) or not isinstance(v,(float,int)) or not math.isfinite(v) or not low<=v<=high:
             raise ValueError('Ungültige Anlagenparameter')
+    if 'name' not in config:
+        config['name']='Anlagenstandort'
     if not isinstance(config.get('name'),str) or not config['name'].strip():
         raise ValueError('Ungültiger Standortname')
     return config
