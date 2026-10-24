@@ -1,5 +1,5 @@
 {
-  "version": "1.49.1",
+  "version": "1.49.2",
   "updated": "2026-10-24",
   "sections": [
     {
@@ -29,16 +29,16 @@
         ],
         "rows": [
           [
+            "1.49.2",
+            "125",
+            "6.142",
+            "Aktueller Stand; bereinigte Dashboard-Abbildung in der öffentlichen README"
+          ],
+          [
             "1.49.1",
             "125",
             "6.142",
             "Aktueller Stand; öffentliche README auf den tatsächlichen Funktionsumfang abgestimmt"
-          ],
-          [
-            "1.49.0",
-            "125",
-            "6.142",
-            "Aktueller Stand; portable lokale Geräte-, Standort- und Deployment-Konfiguration"
           ]
         ]
       }
@@ -484,6 +484,13 @@
     }
   ],
   "releases": [
+    {
+      "version": "1.49.2",
+      "date": "2026-10-24",
+      "changes": [
+        "Bereinigten Dashboard-Screenshot in die öffentliche README aufgenommen; die beiden privaten Ortsnamen sind darin unkenntlich."
+      ]
+    },
     {
       "version": "1.49.1",
       "date": "2026-10-24",
